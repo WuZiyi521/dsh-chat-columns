@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>chat-columns 沙盒</title>
+<style>
+  :root { --dsh-chat-content-width: min(100% - 32px, 920px); }
+  body { margin:0; font:15px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         background:#fff; color:#1a1a1a; }
+  .toolbar { position:sticky; top:0; background:#fff; border-bottom:1px solid #eee;
+             padding:8px 16px; display:flex; gap:8px; align-items:center; z-index:5; }
+  .toolbar button { font:inherit; padding:4px 10px; border:1px solid #ddd; border-radius:8px;
+                    background:#fff; cursor:pointer; }
+  .toolbar button.on { background:#111; color:#fff; border-color:#111; }
+  .scrollBody { position:absolute; top:41px; bottom:0; left:0; right:0; overflow-y:auto; }
+  .column { max-width: var(--dsh-chat-content-width); margin:0 auto; padding:24px 0 80px; }
+  /* 真实宿主：列容器自己就是 display:flex（多列失效的元凶） */
+  .column > [data-chat-flow] { display:flex; flex-direction:column; }
+  .row { border:1px solid #ececec; border-radius:12px; padding:14px 16px; margin:0 0 16px; }
+  .row.user { background:#f7f7f5; }
+  .row.tall { min-height:260px; }
+  .tag { font:500 11px/1 ui-monospace,Menlo,monospace; color:#888; letter-spacing:.08em; }
+  pre { background:#f6f6f4; padding:10px; border-radius:8px; overflow:auto; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="tag">沙盒</span>
+  <button data-n="auto" class="on">自动</button>
+  <button data-n="1">1 列</button>
+  <button data-n="2">2 列</button>
+  <button data-n="3">3 列</button>
+  <span class="tag" id="stat"></span>
+</div>
+<div class="scrollBody" data-conversation-scroll>
+  <div class="column">
+    <div data-chat-flow>
+      <div class="older"><button id="olderBtn">加载更早</button></div>
+      <div class="row" data-chat-turn="1" data-chat-flow-kind="user"><div class="tag">用户 · 第1轮</div>把这份 PDF 按页切开，两页并排导出。</div>
+      <div class="row tall" data-chat-turn="2" data-chat-flow-kind="assistant"><div class="tag">助手 · 第2轮</div>先确认你要的是「一页一张图」还是「两页拼一张」。<pre>const pages = await openPdf(path);\nfor (const p of pages) render(p);</pre></div>
+      <div class="row" data-chat-turn="3" data-chat-flow-kind="tool"><div class="tag">工具 · 第3轮</div>read_file(src/app.js) → 747 行</div>
+      <div class="row tall" data-chat-turn="4" data-chat-flow-kind="assistant"><div class="tag">助手 · 第4轮</div>这里是一段很长的解释，用来模拟真实会话里那种一次占半屏的段落。<br>第二句。<br>第三句。<br>第四句。<br>第五句。</div>
+      <div class="row" data-chat-turn="5" data-chat-flow-kind="user"><div class="tag">用户 · 第5轮</div>那就两页拼一张，A4 横向。</div>
+      <div class="row tall" data-chat-turn="6" data-chat-flow-kind="assistant"><div class="tag">助手 · 第6轮</div>明白，改成横向 A4。<pre>export function stitch(pages) {\n  return canvas;\n}</pre></div>
+      <div class="row" data-chat-turn="7" data-chat-flow-kind="assistant"><div class="tag">助手 · 第7轮</div>收尾说明。</div>
+      <div data-chat-turn-spacer></div>
+    </div>
+  </div>
+</div>
+<script>
+  // 极简 __ModuleLoader__ 垫片：把插件的 exports 跑起来
+  window.__err = '';
+  window.addEventListener('error', e => { window.__err = String(e.message); document.title = 'ERR:' + e.message; });
+  window.__ModuleLoader__ = {
+    load({ id, factory }) {
+      const mod = factory((name) => { throw new Error('沙盒不提供 ' + name); });
+      if (mod && typeof mod.apply === 'function') {
+        window.__dshChatColumns_ctx = {
+          effect(fn) { const d = fn(); (window.__effects ||= []).push(d); return d; },
+        };
+        mod.apply(window.__dshChatColumns_ctx);
+      }
+      window.__dshChatColumnsPlugin = mod;
+    },
+  };
+</script>
+<script src="../lib/client.js"></script>
+<script>
+  const stat = document.getElementById('stat');
+  const paint = () => {
+    const flow = document.querySelector('[data-chat-flow]');
+    stat.textContent = '列数=' + (flow.dataset.dshcCols || '1') +
+      ' | 容器宽=' + Math.round(document.querySelector('[data-conversation-scroll]').clientWidth);
+  };
+  setInterval(paint, 400);
+  // 模拟宿主的锚点保持：点「加载更早」后，把滚动位置往下补 300px
+  let olderClicks = 0;
+  const ob = document.getElementById('olderBtn');
+  ob.addEventListener('click', () => {
+    olderClicks++;
+    const sc = document.querySelector('[data-conversation-scroll]');
+    sc.scrollTop += 300;
+    stat.dataset.older = String(olderClicks);
+  });
+  if (new URLSearchParams(location.search).get('autotop')) {
+    setTimeout(() => {
+      const sc = document.querySelector('[data-conversation-scroll]');
+      sc.scrollTop = 0;
+      sc.dispatchEvent(new Event('scroll'));
+      setTimeout(() => {
+        const el = document.createElement('pre');
+        el.id = 'RESULT';
+        el.textContent = 'olderClicks=' + olderClicks + ' scrollTop=' + Math.round(sc.scrollTop);
+        document.body.appendChild(el);
+      }, 800);
+    }, 600);
+  }
+  document.querySelector('.scrollBody').addEventListener('scroll', () => {
+    stat.dataset.top = String(Math.round(document.querySelector('[data-conversation-scroll]').scrollTop));
+  });
+  const q = new URLSearchParams(location.search).get('cols');
+  if (q) {
+    try {
+      window.__dshChatColumns.set(q);
+      setTimeout(() => window.__dshChatColumns.refresh(), 300);
+    } catch (e) {
+      stat.textContent = 'ERR ' + (e && e.message);
+    }
+  }
+  document.querySelectorAll('.toolbar button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.toolbar button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    window.__dshChatColumns.set(b.dataset.n);
+    setTimeout(paint, 60);
+  });
+</script>
+</body>
+</html>

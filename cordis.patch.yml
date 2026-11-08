@@ -1,0 +1,5 @@
+# dsh-chat-columns bundle layer：按包名引用插件。
+# 安装：dsh plugin --profile web add <本包路径>
+- insert:
+    - id: chat-columns
+      name: dsh-chat-columns

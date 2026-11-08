@@ -27,11 +27,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/<you>/dsh-chat-columns.git"
+    "url": "git+https://github.com/WuZiyi521/dsh-chat-columns.git"
   },
-  "homepage": "https://github.com/<you>/dsh-chat-columns",
+  "homepage": "https://github.com/WuZiyi521/dsh-chat-columns",
   "bugs": {
-    "url": "https://github.com/<you>/dsh-chat-columns/issues"
+    "url": "https://github.com/WuZiyi521/dsh-chat-columns/issues"
   },
   "keywords": [
     "dsh",
@@ -40,5 +40,5 @@
     "multi-column",
     "layout"
   ],
-  "author": ""
+  "author": "WuZiyi521"
 }

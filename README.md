@@ -15,7 +15,7 @@
 ## 装
 
 ```bash
-git clone https://github.com/<you>/dsh-chat-columns.git
+git clone https://github.com/WuZiyi521/dsh-chat-columns.git
 dsh plugin --profile web add "$PWD/dsh-chat-columns"
 ```
 

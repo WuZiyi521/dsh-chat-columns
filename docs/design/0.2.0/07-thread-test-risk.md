@@ -62,7 +62,10 @@ interface ThreadRegistry {
 约束：
 
 - `ReaderCore` 持有 `Map<Element, ThreadContext>`（容器还活着时强引用，`dispose` 时删），**没有** `currentFlow` 这类模块级可变槽。今天 `lastFlow`/`appliedFlows`（`仓库/lib/client.js:199-201`）承担的职责拆成：线程内 `flow()` + 线程内 `applied: Set<Element>`。
-- `active()` 是**派生**：最近一次 `pointerdown|wheel|keydown|focusin` 命中的 scroller；没有任何交互时退化为「可见面积最大的、含内容行的 scroller」。这比 0.1.4 的「行数最多的 scroller」（`仓库/lib/client.js:131-145`）更贴近"用户正在读哪个"，也顺手修掉"两个容器行数接近会认错"的已知限制。`[假设]` 首次交互前可能短暂选错，需真机确认；不引入第三种启发式。
+- `active()` 在 **0.2 恒等于 `HostAdapter.current()`**（主会话容器），与 01 §0 第 4 条一致。
+「最近一次 `pointerdown|wheel|keydown|focusin` 命中的 scroller」只作为 `ThreadRegistry` 的**预留派生**，
+**不参与 0.2 的排版决策**——0.2 只有一个容器会被排版，多容器调度属于 0.3 之后。
+（0.1.4 的「行数最多的 scroller」正是被这条取代的，`仓库/lib/client.js:131-145`。）
 - `<html data-dshc*>` 只保留为**诊断视图**（版本/owner/state/active key），不是真值来源；`data-dshcThread` 写到 flow 与容器上，供 HMR 后从 DOM 重建归属。
 - 记忆槽：`localStorage["dsh-chat-columns:threads"]`，一个 JSON，LRU 上限 30 条、每条只存 `{mode?, cols?}`。`[假设]` 30 条足够覆盖常用会话；超限不报错，直接淘汰最旧。
 
@@ -153,7 +156,7 @@ const sid = scroller.closest("[data-conversation-content]")
 | S9 无缝几何对照 | 合成 flow，行高已知，视口 H=1000 | scrollTop 0→max 分 300 步 | 每步"屏幕 y 处应是哪一行"与 `elementFromPoint` 命中一致（≤1 行）；接缝 y ∈ [H-2, H]；插件写 scrollTop 次数 == 0 |
 | S10 HMR 双线程 | 两线程各自套列/复制 | `new Function(src)()` 造新实例，再执行旧 disposer | 徽标/样式各 1；两线程布局都在且归属新实例；旧 disposer 不删任何新状态；`data-dshcThread` 与两个容器对得上 |
 | S11 视口高变化 | 无缝模式，接缝在底 | 高 1000→800→1000 | 重切段后接缝仍 ∈ [H-2,H]；不出现空白列；当前阅读锚点行位移 ≤ 4px |
-| R1 真机侧栏并发 | 247 行主会话 + 打开子智能体右栏 chat | 主会话设报纸 3 列，侧栏设无缝，各滚 | 两 scroller 的 `data-dshcThread` 不同；主会话保持 3 列；侧栏不改主会话；每线程最多 1 个 in-flight |
+| R1 真机侧栏共存（**不排版**） | 247 行主会话 + 打开子智能体右栏 chat | 主会话报纸 3 列；对右栏做一次滚动与点击 | 右栏**无列、无 `dshc-*` 痕迹、无 history 请求**；主会话保持 3 列不被抢占；两容器 `data-dshcThread` 不同；in-flight ≤ 1 |
 | R2 真机锚点 | 有 hasMore 的会话 | 滚轮到顶触发一批加载 | 报纸：`scrollHeight` 增量与 `scrollTop` 增量差 ≤ 2px，锚点行 `top` 差 ≤ 2px；无缝：锚点行差 ≤ 4px，连 3 批累计 ≤ 8px |
 | R3 真机无缝连续性 | 无缝 + 可滚 3 屏 | CDP 合成 60 次 wheel（120px/次），逐帧采接缝 y | 接缝 y 的 p95 偏差 ≤ 4px；`scrollTop` 单调；到底部时 `[data-chat-following-tail]` 行为与单列基线一致 |
 | R4 真机复制性能 | 247 行，复制 3 栏 | 渲染 + 单栏滚 500 帧 | 首帧 ≤ 300ms；长任务（>50ms）0 个；DOM 节点 ≤ 3× 源；堆增量 ≤ 80MB `[假设：阈值待实测校准]` |

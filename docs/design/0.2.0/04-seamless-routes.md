@@ -317,3 +317,12 @@ Object.defineProperty(Element.prototype, "scrollTop", { get: d.get, set(v){ log(
 6. 让 `scrollTop ≡ 流位置`（`scrollHeight − clientHeight = L − H`）能让宿主的 `nearBottom`/跟随/回到底部**自动正确**，这是 R2 相对 R1/R3 的关键优势。
 7. 推荐 R2；R1 作为零重排保底；R3 只在 R2 帧级性能不过关或必须抢 `scrollTop` 时启用，并显式记录"牺牲宿主跟随"。
 8. P1 不接受静态截图：以 T1–T11 的帧级/内容守恒/写入计数为验收口径，R2 的 go/no-go 门槛写在 §5 末。
+
+
+---
+
+## 维护方裁决（2026-11-09）
+
+- **P1 的滚动写入口径是「零 `scrollTop` 写入」**，非零即不通过（Q5）。§5 的 T5/T9 按此执行。
+- P1 只做「等手势静默后再加载」；任何例外必须**重新审批**，不是 P1 的选项。
+- 接缝语义已定为 R2（Q1）。R1 仅作 R2 未过门槛时的退路，不在 P1 并行。

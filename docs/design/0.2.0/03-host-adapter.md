@@ -344,3 +344,12 @@ type ConversationRef = {
 6. `apply()` 早于会话 DOM（368ms vs 684ms）——HostAdapter 必须「先空后有」，观察者驱动。
 7. 「加载更早」= 主 flow 直接子节点里的一个按钮；点击后 `disabled`+"Loading…"；锚点补偿由宿主 `beginPaging/preserve` 完成，**只有点按钮才免费拿到补偿**；paging 失败无 DOM。
 8. HostAdapter 只需 8 个方法（current/observe/contentRoot/scrollport/snapshotAnchor/restoreAnchor/hasMore/requestOlder）+1 个可选加速；不做多会话注册表、不做滚动引擎、不做失败分类。
+
+
+---
+
+## 维护方裁决（2026-11-09）
+
+- **不等宿主承诺**（Q7）：容器识别改为「版本感知 + 多信号交叉校验 + 失败冻结」，
+  详见 `08-open-questions.md` Q7。本文 §2 的判据是交叉校验里的主信号，不是唯一信号。
+- 校验失败时**不排版、不清残留、不猜**，徽标显示「宿主结构已变化，已冻结」。

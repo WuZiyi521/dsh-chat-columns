@@ -8,6 +8,9 @@
  *   - T3 没有候选数断言，干净环境恒真；
  *   - 固定 sleep、硬编码标题、改 profile 不按字节恢复、不挡 Ctrl-C。
  * v2 逐条整改。
+ * 0.1.4 复核整改：新增 T3b（面积更大的外部 flow 对抗测试）。同时 T1a 的干扰面板
+ * 改为注入到主会话滚动容器**内部**——候选范围已收窄到该容器，容器外的注入节点
+ * 不再参与裁决，继续挂在 body 上就测不到 ambiguous 了。
  *
  * 用法：
  *   node harness/state-tests.mjs
@@ -116,7 +119,7 @@ const RESIDUE = `(() => {
     withAtomic: flows.reduce((n, f) => n + f.querySelectorAll('.dshc-atomic').length, 0),
     withVar: flows.filter(f => f.style.getPropertyValue('--dsh-chat-content-width')).length,
     rootVar: d.style.getPropertyValue('--dsh-chat-content-width') || null,
-    dataAttrs: ['dshc', 'dshcWidth', 'dshcN', 'dshcState'].filter(k => d.dataset[k] !== undefined).sort(),
+    dataAttrs: ['dshc', 'dshcWidth', 'dshcN', 'dshcState', 'dshcRootOwner'].filter(k => d.dataset[k] !== undefined).sort(),
     api: typeof window.__dshChatColumns,
   };
 })()`;
@@ -161,18 +164,60 @@ try {
     multi.total >= 2 && multi.applied === 1 && multi.top.cols !== "",
     { total: multi.total, applied: multi.applied, topCols: multi.top?.cols });
 
+  // 0.1.4 复核第 2 条：造一个比主会话**更大**、但不在滚动容器内的 flow。
+  // 旧实现全局按面积选，会把它当成活动面板（随后 closest 找不到 scroller，
+  // 主会话的分栏被整组拆掉）。修复后它根本不进候选集。
+  const adv = await cdp.evaluate(`(async () => {
+    const real = [...document.querySelectorAll('[data-chat-flow]')].find(f => f.classList.contains('dshc-flow'));
+    const d = document.documentElement;
+    const sc = real.closest('[data-conversation-scroll]');
+    const before = real.style.columnCount || '';
+    const ext = document.createElement('div');
+    ext.setAttribute('data-chat-flow', ''); ext.id = 'dshc-test-external';
+    ext.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:1;pointer-events:none';
+    for (let i = 0; i < 20; i++) {
+      const row = document.createElement('div');
+      row.setAttribute('data-chat-flow-key', 'ext-' + i);
+      row.textContent = 'external ' + i;
+      ext.appendChild(row);
+    }
+    document.body.appendChild(ext);
+    const area = (el) => {
+      const r = el.getBoundingClientRect();
+      return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) *
+             Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+    };
+    const ratio = area(ext) / Math.max(1, area(real));
+    const outsideScroller = !sc.contains(ext);
+    await new Promise(x => setTimeout(x, 1200));
+    const out = {
+      ratio: +ratio.toFixed(2), outsideScroller,
+      state: d.dataset.dshcState, before,
+      realCols: real.style.columnCount || '', extCols: ext.style.columnCount || '',
+      applied: document.querySelectorAll('[data-chat-flow].dshc-flow').length,
+    };
+    ext.remove();
+    return out;
+  })()`);
+  t("T3b 面积更大的外部 flow（容器外）不能抢占主会话",
+    adv.ratio > 1.2 && adv.outsideScroller && adv.state === "active" &&
+    adv.realCols === adv.before && Number(adv.realCols) >= 2 && adv.extCols === "" && adv.applied === 1,
+    adv);
+
+  // 干扰面板必须挂在主会话滚动容器内部，才属于候选集（候选范围已收窄）。
   const amb = await cdp.evaluate(`(async () => {
     const real = [...document.querySelectorAll('[data-chat-flow]')].find(f => f.classList.contains('dshc-flow'));
+    const sc = real.closest('[data-conversation-scroll]') || document.body;
     const r = real.getBoundingClientRect();
     const fake = document.createElement('div');
     fake.setAttribute('data-chat-flow', ''); fake.id = 'dshc-test-fake';
     fake.style.cssText = 'position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;z-index:1';
     for (let i = 0; i < 3; i++) { const row = document.createElement('div'); row.setAttribute('data-chat-flow-key', 'fake-' + i); row.textContent = 'test'; fake.appendChild(row); }
-    document.body.appendChild(fake);
+    sc.appendChild(fake);
     await new Promise(x => setTimeout(x, 800));
     return { state: document.documentElement.dataset.dshcState, realCols: real.style.columnCount || '', fakeCols: fake.style.columnCount || '', applied: document.querySelectorAll('[data-chat-flow].dshc-flow').length };
   })()`);
-  t("T1a active → ambiguous：状态正确、冻结不拆、干扰面板没被套列",
+  t("T1a active → ambiguous：容器内等大面板触发冻结、不拆、没被套列",
     amb.state === "ambiguous" && amb.realCols === base.value.top.cols && amb.fakeCols === "" && amb.applied === 1, amb);
 
   setBundles(false);
@@ -215,10 +260,10 @@ try {
     await new Promise(r => setTimeout(r, 1200));
     return ${RESIDUE};
   })()`);
-  t("T2 active → none：state=none、插件在位、data 只剩 dshc/dshcState、无残留",
+  t("T2 active → none：state=none、插件在位、data 只剩 dshc/dshcRootOwner/dshcState、无残留",
     !none.skipped && none.state === "none" && none.badge === 1 && none.styles === 1 && none.api === "object" &&
     none.withClass === 0 && none.withCols === 0 && none.withAtomic === 0 && none.withVar === 0 &&
-    (none.dataAttrs || []).join(",") === "dshc,dshcState", none);
+    (none.dataAttrs || []).join(",") === "dshc,dshcRootOwner,dshcState", none);
 
   await waitFor(cdp, READY(JSON.stringify(TITLE)), "T2b 前置");
   await cdp.evaluate(OPEN(TITLE));
@@ -227,7 +272,7 @@ try {
 } catch (err) {
   console.error("测试中断:", err.message);
 } finally {
-  await cdp.evaluate(`document.getElementById('dshc-test-fake')?.remove(); 1`).catch(() => {});
+  await cdp.evaluate(`document.getElementById('dshc-test-fake')?.remove(); document.getElementById('dshc-test-external')?.remove(); 1`).catch(() => {});
   restoreProfile();
   cdp.close();
 }

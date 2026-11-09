@@ -14,6 +14,27 @@
 - 回归测试 v2（`harness/state-tests.mjs`）重写：每条用例自带前置断言、轮询替代固定 sleep、
   profile 按字节备份恢复、处理 SIGINT/SIGTERM、校验页面身份；用例从 6 条扩到 9 条。
 
+### 0.1.4 复核整改（同日，待正式验收）
+
+只处理复核提出的两项阻塞，未扩大范围、未重跑完整用例集。
+
+- **根节点实例归属保护**（阻塞 1）：新增 `<html data-dshcRootOwner>`，`apply()` 抢占归属，
+  `relayout()` / `cleanupLegacyRootVar()` / disposer 都先校验 `ownsRoot()`。
+  旧实例 disposer 晚于新实例 apply 时，不再删除新实例的
+  `data-dshc / dshcWidth / dshcN / dshcState`。
+- **候选范围收窄到主会话滚动容器**（阻塞 2）：`mainScroller()` 先按宿主结构认出装着最多
+  `[data-chat-flow-key]` 内容行的 `[data-conversation-scroll]`，`findParts()` 只在其中取
+  flow 候选；容器外再大的 flow 也抢不走主会话。面积排序、内容行过滤、嵌套排除、
+  ambiguous 迟滞不变。
+- **定向回归** `harness/targeted-tests.mjs`（本地无头浏览器，5/5 通过）：外部大 flow 对抗、
+  容器内 ambiguous 保留、旧实例 disposer 晚到、单属主卸载全清；
+  另有撤掉修复的负向对照（3/5）证明用例有效。详见 `docs/testing.md` 第十一节。
+- **已有测试调整**：`state-tests.mjs` 新增 T3b 对抗用例、T1a 干扰面板移入容器内、
+  T2 断言补 `dshcRootOwner`；`harness/index.html` 补 `data-chat-flow-key`（沙盒此前会恒判 none）。
+  真实 DSH 上的 `state-tests.mjs` 本轮未复跑。
+- **文档口径**：README 版本标题与算法说明更新；三种模式统一为**报纸 / 无缝 / 复制**
+  （无缝 = 原「传送门」，复制 = 原「分屏」）；历史验收结论与已知限制改为按当前状态描述。
+
 ## 0.1.3 — 2026-11-09
 
 **生命周期收口版**（回应裁决第一轮的第 6 条）。

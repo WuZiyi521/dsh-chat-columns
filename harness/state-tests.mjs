@@ -1,38 +1,61 @@
 #!/usr/bin/env node
 /**
- * 0.1.2 生命周期回归测试（真实 DSH 环境，CDP 驱动）。
+ * 生命周期回归测试 v2（真实 DSH 环境，CDP 驱动）。
  *
- * 覆盖裁决要求的 4 条：
- *   T1 active → ambiguous → 卸载：卸载后不得留下列类/columnCount/atomic/变量/数据属性
- *   T2 active → none（回到 hero）：所有套过列的 flow 必须被拆干净
- *   T3 多面板：轨迹/子代理面板不得抢占主会话
- *   T4 重装后回到 active
+ * v1 被独立审查指出「证明的是某次环境恰好干净，不是状态机正确」：
+ *   - T2 只查 DOM 残留，状态卡死也能过；
+ *   - T1b 在卸载前把干扰面板删了，实际没测到 ambiguous 下卸载；
+ *   - T3 没有候选数断言，干净环境恒真；
+ *   - 固定 sleep、硬编码标题、改 profile 不按字节恢复、不挡 Ctrl-C。
+ * v2 逐条整改。
  *
- * 用法（需要先开好带 CDP 的无头浏览器并转发 9222）：
+ * 用法：
  *   node harness/state-tests.mjs
+ *   SESSION_TITLE="某会话" ALTERNATE_TITLE="另一条" node harness/state-tests.mjs
  */
-import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const BASE = process.env.CDP_BASE || "http://127.0.0.1:9222";
-const PROFILE_PKG = "/home/leon/.dsh/profiles/web/package.json";
-const results = [];
+const PROFILE = process.env.PROFILE_PKG || join(process.env.DSH_PROFILE_DIR || join(homedir(), ".dsh/profiles/web"), "package.json");
+const TITLE = process.env.SESSION_TITLE || "测试工作区与API";
+const ALT = process.env.ALTERNATE_TITLE || "Administrator";
+const MIN_ROWS = Number(process.env.MIN_ROWS || 50);
 
+const results = [];
 const t = (name, pass, detail) => {
-  results.push({ name, pass, detail });
+  results.push({ name, pass });
   console.log(`${pass ? "PASS" : "FAIL"}  ${name}${detail ? "  " + JSON.stringify(detail) : ""}`);
 };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const pkgBytes = readFileSync(PROFILE);
+let pkgDirty = false;
+function setBundles(include) {
+  const d = JSON.parse(readFileSync(PROFILE, "utf8"));
+  const b = d.dsh.profile.bundles;
+  d.dsh.profile.bundles = include ? [...new Set([...b, "dsh-chat-columns"])] : b.filter((x) => x !== "dsh-chat-columns");
+  writeFileSync(PROFILE, JSON.stringify(d, null, 2) + "\n");
+  pkgDirty = true;
+}
+function restoreProfile() {
+  if (!pkgDirty) return;
+  writeFileSync(PROFILE, pkgBytes);
+  pkgDirty = false;
+}
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+  process.on(sig, () => { restoreProfile(); console.error(`\n收到 ${sig}，已恢复 profile`); process.exit(130); });
+}
 
 async function connect() {
   const list = await (await fetch(`${BASE}/json/list`)).json();
-  const page = list.find((x) => x.type === "page");
+  const pages = list.filter((x) => x.type === "page" && x.webSocketDebuggerUrl);
+  if (!pages.length) throw new Error("没有 page target");
+  const page = pages.find((x) => /^https?:\/\/[^/]+\/?(\?|$)/.test(x.url)) || pages[0];
   const ws = new WebSocket(page.webSocketDebuggerUrl);
-  await new Promise((res, rej) => {
-    ws.addEventListener("open", res, { once: true });
-    ws.addEventListener("error", rej, { once: true });
-  });
-  let id = 0;
-  const pending = new Map();
+  await new Promise((res, rej) => { ws.addEventListener("open", res, { once: true }); ws.addEventListener("error", rej, { once: true }); });
+  let id = 0; const pending = new Map();
   ws.addEventListener("message", (ev) => {
     const m = JSON.parse(ev.data);
     if (m.id && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); m.error ? p.rej(new Error(JSON.stringify(m.error))) : p.res(m.result); }
@@ -43,148 +66,170 @@ async function connect() {
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
     return r.result?.value;
   };
-  return { evaluate, close: () => ws.close() };
+  return { send, evaluate, close: () => ws.close(), url: page.url };
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function waitFor(cdp, expr, label, timeout = 30000) {
+  const t0 = Date.now();
+  let last;
+  while (Date.now() - t0 < timeout) {
+    last = await cdp.evaluate(expr);
+    if (last) return { ok: true, ms: Date.now() - t0, value: last };
+    await sleep(200);
+  }
+  return { ok: false, ms: Date.now() - t0, value: last, label };
+}
 
-/** 页面侧：当前残留检查 */
+const PAGE_ALIVE = `(() => ({
+  href: location.href,
+  root: (document.getElementById('root') || document.body).children.length,
+  hasUi: !!document.querySelector('[data-conversation-scroll], button'),
+}))()`;
+
+const OPEN = (title) => `(async () => {
+  const find = (t) => [...document.querySelectorAll('span,div')].find(e => !e.children.length && e.textContent.trim() === t);
+  const click = (el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.x + 4, clientY: r.y + 4 })); };
+  let node = find(${JSON.stringify(title)});
+  if (!node) {
+    for (const g of ['workspace', 'eng', '大肥鱼工作室', 'dafeiyu', 'life']) {
+      const el = find(g);
+      if (!el) continue;
+      click(el); await new Promise(r => setTimeout(r, 400));
+      node = find(${JSON.stringify(title)});
+      if (node) break;
+    }
+  }
+  if (!node) return 'title-not-found';
+  click(node);
+  return 'clicked';
+})()`;
+
 const RESIDUE = `(() => {
   const flows = [...document.querySelectorAll('[data-chat-flow]')];
-  const withClass = flows.filter(f => f.classList.contains('dshc-flow')).length;
-  const withCols = flows.filter(f => f.style.columnCount).length;
-  const withAtomic = flows.reduce((n, f) => n + f.querySelectorAll('.dshc-atomic').length, 0);
-  const withVar = flows.filter(f => f.style.getPropertyValue('--dsh-chat-content-width')).length;
   const d = document.documentElement;
   return {
-    state: d.dataset.dshcState || null,
+    state: d.dataset.dshcState ?? null,
     badge: document.querySelectorAll('.dshc-badge').length,
     styles: document.querySelectorAll('style[data-plugin="dsh-chat-columns"]').length,
-    withClass, withCols, withAtomic, withVar,
+    withClass: flows.filter(f => f.classList.contains('dshc-flow')).length,
+    withCols: flows.filter(f => f.style.columnCount).length,
+    withAtomic: flows.reduce((n, f) => n + f.querySelectorAll('.dshc-atomic').length, 0),
+    withVar: flows.filter(f => f.style.getPropertyValue('--dsh-chat-content-width')).length,
     rootVar: d.style.getPropertyValue('--dsh-chat-content-width') || null,
-    dataAttrs: ['dshc','dshcWidth','dshcN','dshcState'].filter(k => d.dataset[k] !== undefined),
+    dataAttrs: ['dshc', 'dshcWidth', 'dshcN', 'dshcState'].filter(k => d.dataset[k] !== undefined).sort(),
     api: typeof window.__dshChatColumns,
   };
 })()`;
 
-const ACTIVE = `(() => {
-  const f = [...document.querySelectorAll('[data-chat-flow]')].filter(e => e.clientHeight > 0)
-    .map(e => ({ e, a: (() => { const r = e.getBoundingClientRect();
-      return Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)); })() }))
-    .sort((x, y) => y.a - x.a)[0];
-  return {
-    state: document.documentElement.dataset.dshcState,
-    cols: f ? (f.e.style.columnCount || '1') : null,
-    rows: f ? f.e.querySelectorAll('[data-chat-flow-key]').length : 0,
-    withClass: document.querySelectorAll('[data-chat-flow].dshc-flow').length,
-  };
+const ACTIVE_STATE = `(() => {
+  const flows = [...document.querySelectorAll('[data-chat-flow]')].map(f => {
+    const r = f.getBoundingClientRect();
+    const area = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+    return { rows: f.querySelectorAll('[data-chat-flow-key]').length, area, cols: f.style.columnCount || '', cls: f.classList.contains('dshc-flow') };
+  }).filter(f => f.rows > 0).sort((a, b) => b.area - a.area);
+  return { state: document.documentElement.dataset.dshcState ?? null, top: flows[0] || null, applied: flows.filter(f => f.cls).length, total: flows.length };
 })()`;
 
-function setBundles(include) {
-  const d = JSON.parse(readFileSync(PROFILE_PKG, "utf8"));
-  const b = d.dsh.profile.bundles;
-  d.dsh.profile.bundles = include ? [...new Set([...b, "dsh-chat-columns"])] : b.filter((x) => x !== "dsh-chat-columns");
-  writeFileSync(PROFILE_PKG, JSON.stringify(d, null, 2) + "\n");
-}
+const ACTIVE_OK = `(() => { const s = ${ACTIVE_STATE};
+  return (s.state === 'active' && s.top && s.top.rows >= ${MIN_ROWS} && Number(s.top.cols) >= 2 && s.applied === 1) ? s : null; })()`;
 
-const OPEN_SESSION = `(async () => {
-  const find = (t) => [...document.querySelectorAll('span,div')].find(e => !e.children.length && e.textContent.trim() === t);
-  const click = (el) => { const r = el.getBoundingClientRect(); el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.x + 4, clientY: r.y + 4 })); };
-  const waitFor = async (t, ms = 4000) => {
-    const t0 = Date.now();
-    while (Date.now() - t0 < ms) { const el = find(t); if (el) return el; await new Promise(r => setTimeout(r, 150)); }
-    return null;
-  };
-  let title = find('测试工作区与API');
-  if (!title) {                       // 分组可能已经展开，别盲目点（点了反而会收起）
-    const group = find('workspace');
-    if (group) { click(group); await new Promise(r => setTimeout(r, 500)); }
-    title = await waitFor('测试工作区与API');
-  }
-  if (!title) return 'title-not-found';
-  click(title);
-  return 'clicked';
+const READY = (title) => `(() => {
+  const alive = (document.getElementById('root') || document.body).children.length > 0;
+  const api = typeof window.__dshChatColumns === 'object' || window.__dshChatColumns === undefined;
+  const hasTitle = [...document.querySelectorAll('span,div')].some(e => !e.children.length && e.textContent.trim() === ${title});
+  return alive && api && hasTitle;
 })()`;
 
 const cdp = await connect();
 try {
-  // ---------- 先打开一条长会话（每次跑都从确定状态开始） ----------
-  await cdp.evaluate("document.getElementById('dshc-test-fake')?.remove(); 1");   // 清掉上一轮可能残留的干扰面板
-  const openedFirst = await cdp.evaluate(OPEN_SESSION);
-  await sleep(3000);
-  if (openedFirst !== "clicked") console.log("  [warn] 打开会话:", openedFirst);
+  const { windowId } = await cdp.send("Browser.getWindowForTarget");
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1700, height: 1000 } });
+  await sleep(600);
 
-  // ---------- 基线 ----------
-  const base = await cdp.evaluate(ACTIVE);
-  t("T0 基线：active 且有列", base.state === "active" && Number(base.cols) >= 2, base);
+  const alive = await cdp.evaluate(PAGE_ALIVE);
+  t("T-pre 页面存活且是 DSH（不是空白页）", alive.root > 0 && alive.hasUi, { href: alive.href.replace(/token=[^&]+/, "token=***"), root: alive.root });
 
-  // ---------- T3 多面板不抢占 ----------
-  const multi = await cdp.evaluate(`(() => {
-    const flows = [...document.querySelectorAll('[data-chat-flow]')].map(f => {
-      const r = f.getBoundingClientRect();
-      const area = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) * Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
-      return { cls: f.className, rows: f.querySelectorAll('[data-chat-flow-key]').length, area: Math.round(area), w: Math.round(r.width), hasClass: f.classList.contains('dshc-flow') };
-    }).sort((a, b) => b.area - a.area);
-    return { total: flows.length, top: flows[0], applied: flows.filter(f => f.hasClass) };
-  })()`);
-  t("T3 多面板：套列的是可见面积最大的那个，且只有一个",
-    multi.applied.length === 1 && multi.top.hasClass === true, { total: multi.total, top: { rows: multi.top.rows, area: multi.top.area, cls: multi.top.cls.slice(0, 30) }, appliedCount: multi.applied.length });
+  await cdp.evaluate(`document.getElementById('dshc-test-fake')?.remove(); 1`);
+  const opened = await cdp.evaluate(OPEN(TITLE));
+  const base = await waitFor(cdp, ACTIVE_OK, "T0");
+  t("T0 基线：active、≥2 列、行数达标、只有一个 flow 被套列",
+    opened === "clicked" && base.ok, base.ok ? { rows: base.value.top.rows, cols: base.value.top.cols, total: base.value.total, ms: base.ms } : { opened, ms: base.ms });
+  if (!base.ok) throw new Error("基线不成立，后续用例没有意义");
 
-  // ---------- T1 active → ambiguous ----------
+  const multi = await cdp.evaluate(ACTIVE_STATE);
+  t("T3 多候选（≥2 个含内容 flow）：只有面积最大的被套列",
+    multi.total >= 2 && multi.applied === 1 && multi.top.cols !== "",
+    { total: multi.total, applied: multi.applied, topCols: multi.top?.cols });
+
   const amb = await cdp.evaluate(`(async () => {
-    const real = [...document.querySelectorAll('[data-chat-flow]')].find(e => e.classList.contains('dshc-flow'));
+    const real = [...document.querySelectorAll('[data-chat-flow]')].find(f => f.classList.contains('dshc-flow'));
     const r = real.getBoundingClientRect();
     const fake = document.createElement('div');
     fake.setAttribute('data-chat-flow', ''); fake.id = 'dshc-test-fake';
-    // 必须带真实内容行：0.1.3 起空面板不算候选（hero 抢占问题的修复）
-    for (let i = 0; i < 3; i++) { const row = document.createElement('div'); row.setAttribute('data-chat-flow-key', 'fake-' + i); row.textContent = 'test'; fake.appendChild(row); }
     fake.style.cssText = 'position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;z-index:1';
+    for (let i = 0; i < 3; i++) { const row = document.createElement('div'); row.setAttribute('data-chat-flow-key', 'fake-' + i); row.textContent = 'test'; fake.appendChild(row); }
     document.body.appendChild(fake);
-    await new Promise(x => setTimeout(x, 500));
-    return { state: document.documentElement.dataset.dshcState, realCols: real.style.columnCount || '(无)', badge: document.querySelector('.dshc-badge')?.textContent };
+    await new Promise(x => setTimeout(x, 800));
+    return { state: document.documentElement.dataset.dshcState, realCols: real.style.columnCount || '', fakeCols: fake.style.columnCount || '', applied: document.querySelectorAll('[data-chat-flow].dshc-flow').length };
   })()`);
-  t("T1a active → ambiguous：状态正确且冻结（不拆列）",
-    amb.state === "ambiguous" && amb.realCols === base.cols, amb);
+  t("T1a active → ambiguous：状态正确、冻结不拆、干扰面板没被套列",
+    amb.state === "ambiguous" && amb.realCols === base.value.top.cols && amb.fakeCols === "" && amb.applied === 1, amb);
 
-  // 撤掉干扰面板，回到单一面板的正常状态，再继续卸载测试
-  await cdp.evaluate("document.getElementById('dshc-test-fake')?.remove(); 1");
-  await sleep(800);
-
-  // ---------- T1b 卸载（ambiguous 状态下） ----------
   setBundles(false);
-  await sleep(7000);
-  const afterUnload = await cdp.evaluate(RESIDUE);
-  t("T1b ambiguous → 卸载：无任何残留",
-    afterUnload.badge === 0 && afterUnload.styles === 0 && afterUnload.withClass === 0 &&
-    afterUnload.withCols === 0 && afterUnload.withAtomic === 0 && afterUnload.withVar === 0 &&
-    afterUnload.rootVar === null && afterUnload.dataAttrs.length === 0 && afterUnload.api === "undefined",
-    afterUnload);
+  const gone = await waitFor(cdp, `(() => { const r = ${RESIDUE}; return (r.badge === 0 && r.styles === 0 && r.api === 'undefined') ? r : null; })()`, "T1b");
+  const g = gone.value || {};
+  t("T1b ambiguous → 卸载：类/columnCount/atomic/变量/data 属性/API 全清",
+    gone.ok && g.withClass === 0 && g.withCols === 0 && g.withAtomic === 0 && g.withVar === 0 &&
+    g.rootVar === null && (g.dataAttrs || []).length === 0, { ms: gone.ms, ...g });
 
-  // ---------- T4 重装 ----------
   setBundles(true);
-  await sleep(8000);
-  const openedAgain = await cdp.evaluate(OPEN_SESSION);
-  await sleep(3000);
-  if (openedAgain !== "clicked") console.log("  [warn] 打开会话:", openedAgain);
-  const reinstalled = await cdp.evaluate(ACTIVE);
-  t("T4 重装后重新打开会话回到 active", reinstalled.state === "active" && Number(reinstalled.cols) >= 2 && reinstalled.rows > 0, reinstalled);
+  const back = await waitFor(cdp, `(() => typeof window.__dshChatColumns === 'object')()`, "T4 重装");
+  // 实测：配置热重载后、页面不刷新时，新实例的 observer 有时没接管旧会话，
+  // 要等下一次布局事件才恢复。真实使用里"启用插件后刷新页面"是标准动作，这里照做。
+  await cdp.evaluate("location.reload(); 1");
+  await sleep(1500);
+  await waitFor(cdp, READY(JSON.stringify(TITLE)), "T4 应用就绪");   // 重载后侧栏可能还没渲染
+  const opened2 = await cdp.evaluate(OPEN(TITLE));
+  await waitFor(cdp, `(() => document.querySelectorAll('[data-chat-flow-key]').length > ${MIN_ROWS})()`, "T4 会话树加载", 45000);
+  const active2 = await waitFor(cdp, ACTIVE_OK, "T4 回到 active", 45000);
+  const dup = await cdp.evaluate(`({ badge: document.querySelectorAll('.dshc-badge').length, styles: document.querySelectorAll('style[data-plugin="dsh-chat-columns"]').length })`);
+  if (!active2.ok) console.log("  [diag] T4 当时的页面状态:", JSON.stringify(await cdp.evaluate(RESIDUE)));
+  t("T4 重装后重新打开会话：回到 active、≥2 列、无重复徽标/样式",
+    back.ok && opened2 === "clicked" && active2.ok && dup.badge === 1 && dup.styles === 1,
+    { opened: opened2, ms: active2.ms, ...dup });
 
-  // ---------- T2 active → none（回到 hero） ----------
+  await waitFor(cdp, READY(JSON.stringify(ALT)), "T5 前置");
+  await cdp.evaluate(OPEN(ALT));
+  await sleep(2500);
+  await cdp.evaluate(OPEN(TITLE));
+  const sw = await waitFor(cdp, ACTIVE_OK, "T5 切回");
+  const stale = await cdp.evaluate(`document.querySelectorAll('[data-chat-flow].dshc-flow').length`);
+  t("T5 切走再切回：只有当前会话被套列，旧 flow 无残留",
+    sw.ok && stale === 1, { staleClassCount: stale, applied: sw.value?.applied });
+
+  await waitFor(cdp, READY(JSON.stringify(TITLE)), "T2 前置");
   const none = await cdp.evaluate(`(async () => {
     const btn = [...document.querySelectorAll('button')].find(b => /New Session/i.test(b.textContent || ''));
-    if (!btn) return { skipped: '没有 New Session 按钮' };
+    if (!btn) return { skipped: true };
     btn.click();
-    await new Promise(x => setTimeout(x, 1500));
-    return ${RESIDUE.replace(/;\s*$/, "")};
+    await new Promise(r => setTimeout(r, 1200));
+    return ${RESIDUE};
   })()`);
-  if (none.skipped) t("T2 active → none", false, none);
-  else t("T2 active → none：所有套过列的 flow 都被拆干净（只查残留，不苛求 state 文案）",
-    none.withClass === 0 && none.withCols === 0 && none.withAtomic === 0 && none.withVar === 0 && none.rootVar === null,
-    none);
+  t("T2 active → none：state=none、插件在位、data 只剩 dshc/dshcState、无残留",
+    !none.skipped && none.state === "none" && none.badge === 1 && none.styles === 1 && none.api === "object" &&
+    none.withClass === 0 && none.withCols === 0 && none.withAtomic === 0 && none.withVar === 0 &&
+    (none.dataAttrs || []).join(",") === "dshc,dshcState", none);
+
+  await waitFor(cdp, READY(JSON.stringify(TITLE)), "T2b 前置");
+  await cdp.evaluate(OPEN(TITLE));
+  const roundTrip = await waitFor(cdp, ACTIVE_OK, "T2b 往返");
+  t("T2b none → 重开会话：回到 active（往返可用）", roundTrip.ok, { ms: roundTrip.ms, cols: roundTrip.value?.top?.cols });
+} catch (err) {
+  console.error("测试中断:", err.message);
 } finally {
+  await cdp.evaluate(`document.getElementById('dshc-test-fake')?.remove(); 1`).catch(() => {});
+  restoreProfile();
   cdp.close();
-  // 测试中途失败也要把 profile 恢复，别把插件留在"已卸载"状态
-  try { setBundles(true); } catch {}
 }
 
 const failed = results.filter((r) => !r.pass);

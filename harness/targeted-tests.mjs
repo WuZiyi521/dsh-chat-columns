@@ -14,13 +14,15 @@
  */
 import { createServer } from "node:http";
 import { readFile, mkdtemp } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// 版本从 package.json 读，别在用例里写死——改版本号不该让 R0/R3 假失败
+const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 
@@ -181,7 +183,7 @@ try {
     const main = document.querySelector('[data-conversation-scroll] [data-chat-flow]');
     const missing = ['dshc','dshcState','dshcWidth','dshcN','dshcRootOwner'].filter(k => d.dataset[k] === undefined);
     return {
-      pass: !window.__err && d.dataset.dshc === '0.1.4' && d.dataset.dshcState === 'active' &&
+      pass: !window.__err && d.dataset.dshc === ${JSON.stringify(VERSION)} && d.dataset.dshcState === 'active' &&
             Number(main.style.columnCount) >= 2 && main.classList.contains('dshc-flow') &&
             missing.length === 0 &&
             document.querySelectorAll('.dshc-badge').length === 1 &&
@@ -267,6 +269,45 @@ try {
     };
   })()`);
 
+  await check("R5 右栏 embedded 会话（第二个滚动容器）不能抢走主会话", `(async () => {
+    const d = document.documentElement;
+    const mainSc = document.querySelector('[data-conversation-scroll]');
+    const main = mainSc.querySelector('[data-chat-flow]');
+    const before = main.style.columnCount || '';
+    const side = document.createElement('div');
+    side.setAttribute('data-sidebar-chat', '');
+    side.style.cssText = 'position:fixed;right:0;top:0;width:520px;height:900px;z-index:1;pointer-events:none';
+    const sc2 = document.createElement('div');
+    sc2.setAttribute('data-conversation-scroll', '');
+    sc2.style.cssText = 'position:absolute;inset:0;overflow:auto';
+    const flow2 = document.createElement('div');
+    flow2.setAttribute('data-chat-flow', '');
+    for (let i = 0; i < 60; i++) {            // 行数故意比主会话多：旧规则会选它
+      const row = document.createElement('div');
+      row.setAttribute('data-chat-flow-key', 'side-' + i);
+      row.textContent = 'side ' + i;
+      flow2.appendChild(row);
+    }
+    sc2.appendChild(flow2); side.appendChild(sc2); document.body.appendChild(side);
+    window.__dshChatColumns.refresh();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const out = {
+      mainRows: main.querySelectorAll('[data-chat-flow-key]').length,
+      sideRows: flow2.querySelectorAll('[data-chat-flow-key]').length,
+      state: d.dataset.dshcState,
+      mainCols: main.style.columnCount || '', mainCls: main.classList.contains('dshc-flow'),
+      sideCols: flow2.style.columnCount || '', sideCls: flow2.classList.contains('dshc-flow'),
+      applied: document.querySelectorAll('[data-chat-flow].dshc-flow').length,
+      before,
+    };
+    side.remove();
+    window.__dshChatColumns.refresh();
+    out.pass = out.sideRows > out.mainRows && out.state === 'active' &&
+               out.mainCols === before && Number(out.mainCols) >= 2 && out.mainCls &&
+               out.sideCols === '' && !out.sideCls && out.applied === 1;
+    return out;
+  })()`);
+
   await check("R3 旧实例 disposer 晚到：不能清掉新实例的 dshc* 与列布局", `(async () => {
     const d = document.documentElement;
     const main = document.querySelector('[data-conversation-scroll] [data-chat-flow]');
@@ -296,7 +337,7 @@ try {
       colsBefore,
     };
     out.pass = out.ownerChanged && kept.length === keys.length && out.owner === ownerB &&
-               out.state === 'active' && out.version === '0.1.4' &&
+               out.state === 'active' && out.version === ${JSON.stringify(VERSION)} &&
                out.cols === colsBefore && Number(out.cols) >= 2 && out.cls &&
                out.badge === 1 && out.styles === 1 && out.api === 'object' && out.flowOwnerIntact;
     return out;

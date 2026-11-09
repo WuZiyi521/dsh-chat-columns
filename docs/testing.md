@@ -221,3 +221,26 @@ node harness/cdp.mjs shot /tmp/shot.png
 - 几百轮以上的会话（本轮最长 247 行；再长需要一条历史更深的会话）
 - 大图、审批卡、超宽表格、sticky 元素（本机无这些内容或无法构造）
 - macOS / Linux / 移动端
+
+
+## 九、0.1.3 生命周期回归（回应裁决第 1–4 条）
+
+新增 `harness/state-tests.mjs`，在真实 DSH 上跑 6 条状态机用例，**连续两次干净运行均 6/6**：
+
+| 用例 | 结果 |
+|---|---|
+| T0 基线 | PASS（active、3 列、208 行） |
+| T3 多面板不抢占 | PASS（8 个候选，只有主会话被套列） |
+| T1a active → ambiguous | PASS（状态 ambiguous、列保持不拆） |
+| T1b ambiguous → 卸载 | PASS（类/columnCount/atomic/变量/data 属性全清，调试 API 消失） |
+| T4 重装 → 重开会话 | PASS（回到 active、3 列、208 行） |
+| T2 active → none | PASS（所有套过列的 flow 被拆干净） |
+
+**回归测试顺带抓到一个真 bug**：T2 之后 hero 面板仍在 DOM 里且面积比主会话大，
+被面积规则误选 → 修复为「候选必须含内容行」。
+
+### 轮数与行数口径
+
+- 该会话是 **274 轮真实对话**（约 226M token，维护方确认）
+- 页面 DOM 行数：加载完整后 **247 行**；初始只加载到第 5 轮时 **208 行**
+- 两者不是一回事，报告里分别标注

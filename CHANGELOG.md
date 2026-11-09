@@ -1,5 +1,29 @@
 # 更新记录
 
+## 0.1.3 — 2026-11-09
+
+**生命周期收口版**（回应裁决第一轮的第 6 条）。
+
+- **空面板不再算候选**：hero / 占位面板同样"可见面积很大"，但没有任何内容行；
+  只按面积比会把它当活动会话。现在候选必须含 `[data-chat-flow-key]`。
+  （这是回归测试 T4 抓出来的真问题。）
+- `relayout()` 的 `!scroller || !flow` 分支：从"只还宽度变量"改为**拆掉所有套过列的 flow**
+  （列类、`columnCount`、`columnFill`、`atomic` 标记、变量），不再遗漏 `clear(lastFlow)`。
+- disposer 在 `ambiguous` 状态下也能清干净：改用"已套列集合 + lastFlow"兜底，
+  不再依赖 `findParts().flow`（该状态下它是 null）。
+- 新增可重复的状态机回归测试 `harness/state-tests.mjs`（6 条，见下）。
+
+### 回归测试（真实 DSH，连续两次干净运行均 6/6）
+
+| 用例 | 覆盖 |
+|---|---|
+| T0 | 基线：active 且套列 |
+| T3 | 多面板：只套可见面积最大且有内容的那一个 |
+| T1a | active → ambiguous：状态正确、冻结不拆 |
+| T1b | ambiguous → 卸载：类/columnCount/atomic/变量/data 属性全清 |
+| T4 | 重装后重新打开会话回到 active |
+| T2 | active → none：所有套过列的 flow 都被拆干净 |
+
 ## 0.1.2 — 2026-11-09
 
 **验收回应版**（0.1.1 为「有条件通过」）。

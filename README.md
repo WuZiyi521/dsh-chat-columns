@@ -1,13 +1,20 @@
 # dsh-chat-columns
 
-> Newspaper-style multi-column layout for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) web sessions.
-> All columns share the host's single scroll container — scrolling, anchors and "load earlier" keep working untouched.
-> One plugin, no build step, no changes to the app shell.
+> **给超长对话加"读法"。** 一篇几百轮的会话，不该只有"一路往下滚"这一种读法。
+> 报纸（多列扫全貌）、无缝（连续穿过接缝顺着读）、复制（多栏停在不同位置对照）——
+> 同一份内容，三种组织方式。今天能用的是**报纸**，另外两种在做。
+>
+> One plugin, no build step, no changes to the app shell. All modes read the host's content
+> and never take over its scroll container.
 
 ![preview](docs/preview.png)
 
 把 DSH Web 的会话正文排成**报纸式多列**——所有列共用宿主唯一那个滚动容器，
 滚动、锚点、「加载更早」都还是宿主原来的那套，插件只负责列宽和分栏。
+
+**这不是"CSS 加个 column-count"。** 长对话的信息密度和普通文档不同：一轮里有代码、有工具调用、
+有思考过程，读者要的不是"排版好看"，而是**能换一种读法**。三种模式是这个想法的落地，
+报纸只是第一个做稳的。
 
 > 状态：**0.1.4 · 报纸模式（稳定性验收中）**。分列 + 列数自适应 + 滚到顶自动加载 + 热更。
 > 0.1.1 的「有条件通过」是历史结论：长会话与自动加载的端到端证据在 0.1.2 补齐，

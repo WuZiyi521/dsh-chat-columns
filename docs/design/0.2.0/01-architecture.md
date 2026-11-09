@@ -95,39 +95,76 @@
 
 ---
 
-## 4. 内容来源：DOM 是契约，服务是加速
+## 4. 内容来源：双数据源
 
 这是 0.2 最关键、也最容易被写错的一条。
 
-### 4.1 两种实现，一个模型
+### 4.1 三个概念（不要再叫「加速」）
+
+| 概念 | 是什么 | 能承诺什么 |
+|---|---|---|
+| **`DomSource`** | 基础数据源：扫 `[data-chat-flow]` 的可见行 | **只承诺「可见内容」**；保证降级可运行 |
+| **`ServiceSource`** | 可选的高保真数据源：`ctx.get("uiConversation").binding(id).target("chat")` 的 `{order, nodes}` + `ctx.get("sessions")` 的 `hasMore/loadingOlder` | 提供 DOM **无法保证**的内容（折叠 JSON 的 payload、被 `hidden` 摘掉的行）与能力（导出全文、精确定位、全文检索） |
+| **`ContentModel`** | 统一数据模型 | 携带**来源、完整性、可用能力**，上层只认它 |
+
+「加速」这个词不准确：服务不是让同一件事变快，而是**决定复制模式有没有完整内容**。
+
+### 4.2 `ContentModel`
 
 ```ts
 interface ContentModel {
-  readonly version: number;      // 每次内容变化 +1，视图据此增量
-  readonly rows: Row[];          // 有序列（seq/order 来自宿主）
-  readonly hasMore: boolean | null;   // null = 不知道
-  readonly complete: "full" | "partial";  // partial = 可能缺内容（折叠 JSON、hidden 行）
+  readonly version: number;
+  readonly rows: Row[];
+  readonly hasMore: boolean | null;
+  readonly source: "dom" | "service";
+  readonly complete: "full" | "partial";
+  readonly capabilities: {
+    exportFullText: boolean;     // 导出/复制全文
+    preciseLocate: boolean;      // 跨栏精确定位到第 N 轮
+    fullTextSearch: boolean;     // 全文检索
+  };
 }
 ```
 
-- **`DomSource`**（契约实现）：扫 `[data-chat-flow]` 的行，读 DOM 结构。
-  `[已证实]` 会缺内容：`JsonBlock` 折叠时不渲染 payload、展开后截断 20000 字符；
-  带 `hidden` / `hidden="until-found"` 的行被摘掉。→ `complete = "partial"`。
-- **`ServiceSource`**（加速实现）：`ctx.get("uiConversation").binding(id).target("chat")`
-  拿 `{order, nodes}`，`ctx.get("sessions")` 拿 `hasMore/loadingOlder/openState`。→ `complete = "full"`。
+`capabilities` **由 `complete` 派生**，不是独立开关：`full` 才允许三项为真；`partial` 一律为假。
+（原因见 08 Q2：残缺内容上做导出/定位/检索，比不给这个功能更坏。）
 
-### 4.2 边界裁决
+### 4.3 `complete = "full"` 的判定（**不能只看「服务返回了」**）
 
-- **`ctx.get(...)` 不是对外契约**：宿主内部服务，跨版本可能改名或消失，且 `ctx.sessions`
-  这种属性访问会直接抛错（已实测）。所以：
-  - 只在**启动时探测一次**，探测失败就永久降级到 `DomSource`，不重试、不刷日志；
-  - `ServiceSource` 失败时**静默退回** `DomSource`，但 UI 必须显示「降级快照」；
-  - 0.2 的发版验收**不依赖** `ServiceSource`（见 07 §验收）。
-- **两者产出同一个 `ContentModel`**，渲染器只有一套（多一个通用行渲染器，不是第二套系统）。
-- **不让服务参与布局**：`hasMore` 可以来自服务（更准），但布局只吃 `ContentModel`。
+`ServiceSource` 成功返回只是**必要条件**，不是充分条件。必须四道校验全过：
 
-> `[风险]` 若宿主在 0.2.x 移除该服务，复制模式从 `full` 掉到 `partial`，这是**功能降级不是崩溃**——
-> 但必须让用户看得见，否则「看起来完整、实际缺内容」比崩溃更坏。
+| # | 校验 | 不过怎么办 |
+|---|---|---|
+| 1 | **覆盖率**：`nodes` 实际条数 vs `order.length`；缺一条即不完整 | 降 `partial` |
+| 2 | **节点类型**：每个 `node.kind` 在已知集合内 | 未知类型 → 该行标 `unrenderable`（显式占位，不丢），整体降 `partial` |
+| 3 | **必要字段**：`role` / `content` / `seq` 等；缺失即不完整 | 降 `partial` |
+| 4 | **交叉抽样**：抽 20 行与 DOM 可见行做指纹比对；不一致 > 5% | 降 `partial` |
+
+补充规则：
+- DOM 侧的 `hidden` / 折叠**不算缺失**（那是宿主视图选择），但**必须**在抽样时排除，否则会误判。
+- 任一校验失败 → `partial` + 记一条诊断（哪个校验、多少条），**不重试、不刷屏**。
+
+### 4.4 探测时机：给一个明确的初始化窗口
+
+`[已证实]` `apply()` 比会话 DOM 早约 300ms；服务也可能尚未就绪。
+**一次过早的探测失败，不能让整个会话永久降级。**
+
+规则：
+
+1. **不在 `apply()` 时探测**。等「宿主上下文就绪」再开始：`ctx.get("sessions")` 可用 **且**
+   已有活动会话 id。
+2. 就绪后开一个**初始化窗口**：3 秒（与「首次内容 commit 后 2 秒」取先到者）。
+3. 窗口内每 250ms 试一次（最多 12 次），**成功即固定**，不再探测。
+4. 窗口结束仍不可用 → **固定降级**到 `DomSource`，本会话不再重试。
+5. 会话重建（新的 thread key）→ 重新开一次窗口；**每个线程只开一次**，不无限重试。
+
+### 4.5 边界与风险
+
+- **`ctx.get(...)` 不是对外契约**：属性访问（`ctx.sessions`）会直接抛错，只能 `ctx.get`；
+  跨版本可能改名或消失。
+- 0.2 的发版验收**不依赖** `ServiceSource`（见 07 §3）。
+- `[风险]` 服务消失时，复制模式从 `full` 掉到 `partial` 是**功能降级不是崩溃**，
+  但必须让用户看得见——否则「看起来完整、实际缺内容」比崩溃更坏。
 
 ---
 

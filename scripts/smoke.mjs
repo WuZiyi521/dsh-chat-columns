@@ -406,7 +406,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.1.0');
+  assert.equal(data.diag.version, '3.1.1');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -495,7 +495,7 @@ run(`
     // 一条比列高得多的巨型块：报纸模式必须把它标成可跨列、并限高
     const tall = el('div', { 'data-chat-flow-key': 'm6', 'data-chat-flow-kind': 'assistant' });
     tall.textContent = '一段很长的代码块';
-    tall.rect = { top: 116 + 6 * 312, left: 32, right: 1168, bottom: 116 + 6 * 312 + 3000, width: 1136, height: 3000 };
+    tall.rect = { top: 116 + 6 * 312, left: 32, right: 1168, bottom: 116 + 6 * 312 + 5000, width: 1136, height: 5000 };
     tall.computed = { marginTop: '12px' };
     rows.push(tall);
     slot.append(tall);
@@ -564,26 +564,26 @@ step('报纸模式：列样式与标记就位', () => {
   assert.equal(data.mode, 'newspaper');
 });
 
-step('报纸模式：巨型消息被标成可跨列并限高（压掉底部留白）', () => {
+step('报纸模式：消息绝不跨列，诊断可读', () => {
   const data = read(`(() => {
     const diag = window.__dshc.diagnose().newspaper;
-    const tall = __fixture.rows[6];
     return {
-      long: tall.hasAttribute('data-dshc-long'),
-      cap: tall.style.getPropertyValue('max-height'),
-      othersLong: __fixture.rows.slice(0, 6).filter((row) => row.hasAttribute('data-dshc-long')).length,
+      longMarks: __fixture.rows.filter((row) => row.hasAttribute('data-dshc-long')).length,
       applied: diag.applied,
-      capped: diag.capped,
       ideal: diag.ideal,
-      height: diag.height
+      capped: diag.capped,
+      blank: diag.blank,
+      height: diag.height,
+      hasEnds: Array.isArray(diag.columnsEnd) && diag.columnsEnd.length > 0
     };
   })()`);
+  assert.equal(data.longMarks, 0, '不再给消息打「可跨列」标记（避免多列分裂渲染错位）');
   assert.equal(data.applied, true);
-  assert.equal(data.long, true, '3000px 的块应允许跨列');
-  assert.equal(data.cap, '2320px', '理想列高 2442 × 0.95 = 2320');
-  assert.equal(data.othersLong, 0, '300px 的短消息不应被标成可跨列');
-  assert.equal(data.capped, 1);
-  assert.ok(data.ideal > 0 && data.height > 0);
+  assert.ok(data.ideal > 0, '理想列高应可读');
+  assert.equal(typeof data.capped, 'number');
+  assert.equal(typeof data.blank, 'number');
+  assert.ok(data.height > 0);
+  assert.equal(data.hasEnds, true);
 });
 
 step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {

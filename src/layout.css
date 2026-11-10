@@ -359,12 +359,6 @@
   -webkit-column-break-inside: avoid;
 }
 
-/* 超长消息允许跨列：否则均衡分栏会把列高抬到它那么高，其它列一片空白 */
-[data-dshc-a] [data-dshc-item][data-dshc-long] {
-  break-inside: auto;
-  -webkit-column-break-inside: auto;
-}
-
 [data-dshc-a] pre,
 [data-dshc-a] table {
   max-width: 100%;

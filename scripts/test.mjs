@@ -98,6 +98,34 @@ test('任何情况下消息都不跨列', () => {
   }
 });
 
+console.log('math: 报纸限高计划');
+
+test('巨型消息被挑出来限高（理想列高按内容总量算）', () => {
+  const heights = [300, 300, 300, 300, 300, 300, 5000];
+  const gaps = heights.map(() => 12);
+  const plan = math.capPlan(heights, gaps, 2, { minRatio: 1.35, target: 0.95 });
+  assert.equal(Math.round(plan.ideal), 3442);
+  assert.equal(plan.cap, 3270);
+  assert.deepEqual(Array.from(plan.candidates), [6]);
+});
+
+test('普通消息不被限高（宁可留白也不套内部滚动条）', () => {
+  const plan = math.capPlan([300, 300], [0, 0], 2);
+  assert.equal(Math.round(plan.ideal), 300);
+  assert.equal(plan.cap, 285);
+  assert.deepEqual(Array.from(plan.candidates), []);
+});
+
+test('单列时不限高', () => {
+  const plan = math.capPlan([100, 2000], [0, 0], 1);
+  assert.deepEqual(Array.from(plan.candidates), []);
+});
+
+test('多条巨型消息按高度从高到低排队', () => {
+  const plan = math.capPlan([500, 500, 12000, 11000], [0, 0, 0, 0], 3);
+  assert.deepEqual(Array.from(plan.candidates), [2, 3]);
+});
+
 console.log('math: B 投影');
 
 test('逻辑位置按 H 落入对应列', () => {

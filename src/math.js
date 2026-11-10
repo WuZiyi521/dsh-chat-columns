@@ -112,6 +112,42 @@ DSHC.math = (() => {
     return { column, top: r - column * H };
   }
 
+  /**
+   * 报纸模式：算出「理想列高」和需要限高的消息。
+   *
+   * 均衡分栏的列高 = 各列内容高的最大值；一条比一列还高的消息会把**所有**列顶到它那么高，
+   * 其它列下面是整屏空白。所以这里把比 ideal × minRatio 还高的消息挑出来，
+   * 让调用方给它们一个 ideal × target 的高度上限（内容由消息自己滚）。
+   *
+   * @param {number[]} heights 每条消息的自然高度
+   * @param {number[]} gaps 每条消息上方的间距
+   * @param {number} columns 列数
+   * @param {{minRatio?: number, target?: number, floor?: number}} [options]
+   * @returns {{ideal: number, cap: number, candidates: number[]}} candidates 按高度从高到低
+   */
+  function capPlan(heights, gaps, columns, options) {
+    const N = Math.max(1, Number(columns) || 1);
+    const opts = options || {};
+    const minRatio = opts.minRatio === undefined ? 1.35 : opts.minRatio;
+    const target = opts.target === undefined ? 0.95 : opts.target;
+    const floor = opts.floor === undefined ? 240 : opts.floor;
+
+    let total = 0;
+    for (let i = 0; i < heights.length; i += 1) {
+      total += Math.max(0, Number(heights[i]) || 0) + Math.max(0, Number(gaps && gaps[i]) || 0);
+    }
+    const ideal = Math.max(1, total / N);
+    const cap = Math.max(floor, Math.round(ideal * target));
+
+    const candidates = [];
+    for (let i = 0; i < heights.length; i += 1) {
+      if ((Number(heights[i]) || 0) > ideal * minRatio) candidates.push(i);
+    }
+    candidates.sort((a, b) => (Number(heights[b]) || 0) - (Number(heights[a]) || 0));
+
+    return { ideal, cap, candidates };
+  }
+
   /** 数值取整到 0.01，避免 transform 里的长小数。 */
   function round(value) {
     return Math.round((Number(value) || 0) * 100) / 100;
@@ -125,6 +161,7 @@ DSHC.math = (() => {
     fit,
     resolveColumns,
     columnWidth,
+    capPlan,
     pack,
     project,
     round

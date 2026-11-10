@@ -5,7 +5,8 @@
  *  - 宿主的列是 display:flex，CSS 多列对 flex 容器无效，先改回 display:block；
  *  - column-fill:balance，列高由内容与列数共同决定；
  *  - 释放 --dsh-chat-content-width 的宽度限制，退出时原样还回去；
- *  - 短消息 break-inside:avoid，超长消息允许跨列；
+ *  - **任何消息都不跨列**（break-inside:avoid）：CSS 多列一旦把消息切开，
+ *    不可分片的代码块会出现「盒子留在第一列、内容画到第二列」的渲染错位；
  *  - 不接管 scrollTop，滚动/锚点/历史加载都还是宿主自己的。
  *
  * 关于「底部留白」（本文件的核心逻辑）：
@@ -21,13 +22,11 @@ DSHC.newspaper = (() => {
   'use strict';
 
   const RAIL = 44; // 右侧 TurnNavigator 轨道 + 安全距
-  /** 超过「理想列高」的这个比例 → 允许跨列 */
-  const SPLIT_RATIO = 0.5;
-  /** 但太矮的消息不切：切了反而难读 */
-  const SPLIT_MIN = 320;
-  /** 列高超过理想列高的这个倍数 → 说明有切不开的巨型块在顶 */
-  const CAP_SLACK = 1.25;
-  /** 巨型块的高度上限 = 理想列高 × 这个倍数（略小于一列，内容由它自己滚） */
+  /** 列高超过理想列高的这个倍数 → 说明有「比一列还高」的消息在顶 */
+  const CAP_SLACK = 1.2;
+  /** 只有比这个倍数还高的消息才限高：普通消息宁留白，也别给它套内部滚动条 */
+  const CAP_MIN_RATIO = 1.35;
+  /** 这类消息的高度上限 = 理想列高 × 这个倍数（略小于一列，内容由它自己滚） */
   const CAP_TARGET = 0.95;
 
   function create() {
@@ -39,6 +38,7 @@ DSHC.newspaper = (() => {
     let tuneRaf = 0;
     let tuneTimer = 0;
     let tuneCapped = 0;
+    let tuneIdeal = 0;
 
     function markedItems() {
       return column ? Array.from(column.querySelectorAll('[' + adapter.MARK.item + ']')) : [];
@@ -103,35 +103,26 @@ DSHC.newspaper = (() => {
       let total = 0;
       for (let i = 0; i < items.length; i += 1) total += heights[i] + gaps[i];
 
-      const ideal = Math.max(1, total / columns);
-      const splitLimit = Math.max(SPLIT_MIN, ideal * SPLIT_RATIO);
+      const plan = math.capPlan(heights, gaps, columns, {
+        minRatio: CAP_MIN_RATIO,
+        target: CAP_TARGET
+      });
 
-      // 2) 比「半列」还高的消息允许跨列（切在列缝上，读到列底就接到下一列顶部）。
-      for (let i = 0; i < items.length; i += 1) {
-        const el = items[i];
-        if (heights[i] > splitLimit) adapter.setAttr(el, adapter.MARK.long, '');
-        else el.removeAttribute(adapter.MARK.long);
-      }
-
-      // 3) 标记之后如果列高还是远高于理想值，说明有「切不开」的巨型块在顶
-      //    （典型：自带横向滚动、因而整体不可分片的代码块）。
-      //    从最高的开始逐个限高，直到列高回到理想值附近；最多处理 3 个，避免反复强制布局。
-      const capAt = Math.max(240, Math.round(ideal * CAP_TARGET));
+      // 2) 比「一列」高得多的消息：列高会被它顶到它那么高，其它列下面就是整屏空白。
+      //    这类消息占不满一列也没关系——给它一列的高度上限，内容由它自己滚。
+      //    从最高的开始逐个套上限，直到列高回到理想值附近；最多 3 条，避免反复强制布局。
       const capped = new Set();
       let height = column.getBoundingClientRect().height;
-      for (let pass = 0; pass < 3 && height > ideal * CAP_SLACK; pass += 1) {
-        let pick = -1;
-        for (let i = 0; i < items.length; i += 1) {
-          if (capped.has(i) || heights[i] <= ideal) continue;
-          if (pick < 0 || heights[i] > heights[pick]) pick = i;
-        }
-        if (pick < 0) break;
-        capped.add(pick);
-        adapter.setStyle(items[pick], 'max-height', capAt + 'px');
-        adapter.setStyle(items[pick], 'overflow-y', 'auto');
+      const queue = plan.candidates.slice(0, 3);
+      for (const index of queue) {
+        if (height <= plan.ideal * CAP_SLACK) break;
+        capped.add(index);
+        adapter.setStyle(items[index], 'max-height', plan.cap + 'px');
+        adapter.setStyle(items[index], 'overflow-y', 'auto');
         height = column.getBoundingClientRect().height;
       }
       tuneCapped = capped.size;
+      tuneIdeal = Math.round(plan.ideal);
     }
 
     /**
@@ -174,8 +165,8 @@ DSHC.newspaper = (() => {
         applied: true,
         columns,
         height,
-        ideal: Math.round(total / columns),
-        long: items.filter((el) => el.hasAttribute(adapter.MARK.long)).length,
+        ideal: tuneIdeal,
+        long: 0,
         capped: tuneCapped,
         columnsEnd: columnsInfo,
         // 最大一列留白：列高 - 最矮那列的底
@@ -211,5 +202,5 @@ DSHC.newspaper = (() => {
     };
   }
 
-  return { create, RAIL, SPLIT_RATIO, SPLIT_MIN, CAP_SLACK, CAP_TARGET };
+  return { create, RAIL, CAP_SLACK, CAP_MIN_RATIO, CAP_TARGET };
 })();

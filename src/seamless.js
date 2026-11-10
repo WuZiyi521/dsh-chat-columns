@@ -52,6 +52,9 @@ DSHC.seamless = (() => {
     /** sticky 在宿主祖先有滚动/裁剪容器时不可靠，退化为「JS 钉住」的视口层。 */
     let pinnedByJs = false;
     let pinnedValue = '';
+    /** 实验：把消息拆到段落级（display:contents 让块级子元素直接参与列排版） */
+    let blockMode = false;
+    let expanded = new Map();
 
     /* ------------------------------------------------------------- 样式壳 */
 
@@ -189,30 +192,144 @@ DSHC.seamless = (() => {
       }
     }
 
+    /* ---------------------------------------------------- 按块拆分（实验） */
+
+    function px(value) {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    /** 没有可见盒子（padding/border/背景/阴影/左右 margin 都为 0）的容器才允许被摊平。 */
+    function isBoxless(el) {
+      const cs = getComputedStyle(el);
+      if (px(cs.paddingTop) || px(cs.paddingBottom) || px(cs.paddingLeft) || px(cs.paddingRight)) return false;
+      if (px(cs.borderTopWidth) || px(cs.borderBottomWidth) || px(cs.borderLeftWidth) || px(cs.borderRightWidth)) return false;
+      if (px(cs.marginLeft) || px(cs.marginRight)) return false;
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') return false;
+      const bg = cs.backgroundColor || '';
+      if (bg && bg !== 'transparent' && !/rgba\([^)]*,\s*0\s*\)/.test(bg)) return false;
+      if (cs.boxShadow && cs.boxShadow !== 'none' && cs.boxShadow !== '') return false;
+      return true;
+    }
+
+    /** 在一条消息里找「块最多、且自身没有可见盒子」的容器（Markdown 正文容器）。 */
+    function pickBlockContainer(itemEl) {
+      let best = null;
+      const walk = (el, depth) => {
+        if (depth > 5) return;
+        const kids = Array.from(el.children);
+        if (kids.length > 1 && isBoxless(el) && (!best || kids.length > best.score)) {
+          best = { el, score: kids.length };
+        }
+        for (const kid of kids) walk(kid, depth + 1);
+      };
+      walk(itemEl, 0);
+      return best ? best.el : null;
+    }
+
+    /** node 的直接子元素里，包含 target 的那个。 */
+    function childTowards(node, target) {
+      let cursor = target;
+      while (cursor && cursor.parentElement !== node) cursor = cursor.parentElement;
+      return cursor && cursor.parentElement === node ? cursor : null;
+    }
+
+    /**
+     * 把一条消息摊平成块级单元：
+     *  - 从消息行到正文容器的每一层设成 display:contents（不搬家、不克隆）；
+     *  - 这些层里**所有**不在链上的子元素都是单元（文档顺序）——漏掉任何一个，
+     *    它就会留在普通流里和绝对定位的单元重叠（3.3.0 的「文本重叠」就是这个原因）；
+     *  - 只摊平没有可见盒子的容器，带气泡的消息自动回退成整条。
+     * @returns {{units: HTMLElement[], chain: HTMLElement[]}|null}
+     */
+    function expandItem(itemEl) {
+      const cached = expanded.get(itemEl);
+      if (cached && cached.units.every((el) => el.isConnected)) return cached;
+
+      const container = pickBlockContainer(itemEl);
+      if (!container) return null;
+
+      const chain = [];
+      let node = itemEl;
+      let guard = 0;
+      while (node && node !== container && guard < 8) {
+        chain.push(node);
+        node = childTowards(node, container);
+        guard += 1;
+      }
+      if (node !== container) return null;
+      chain.push(container);
+
+      for (const el of chain) {
+        adapter.setStyle(el, 'display', 'contents');
+        adapter.setStyle(el, 'margin', '0');
+      }
+
+      // 链上每一层「不在链上的孩子」都是单元，按文档顺序收集
+      const onChain = new Set(chain);
+      const units = [];
+      const collect = (parent) => {
+        for (const child of Array.from(parent.children)) {
+          if (onChain.has(child)) collect(child);
+          else units.push(child);
+        }
+      };
+      collect(itemEl);
+
+      if (!units.length) return null;
+      const entry = { units, chain };
+      expanded.set(itemEl, entry);
+      return entry;
+    }
+
+    function collapseAll() {
+      for (const entry of expanded.values()) {
+        for (const el of entry.units) adapter.resetEl(el);
+        for (const el of entry.chain) adapter.resetEl(el);
+      }
+      expanded = new Map();
+    }
+
     /** 从 indexer 的结果同步记录表（新增/删除/脏消息）。 */
     function syncItems(items, dirty) {
       const previous = new Map();
       for (const rec of records) previous.set(rec.el, rec);
       const next = [];
 
-      for (const item of items) {
-        let rec = previous.get(item.el);
-        if (!rec) {
-          rec = { el: item.el, id: item.id, gap: gapOf(item.el), height: 0, start: 0, tall: false, cache: '' };
-          styleItem(item.el);
-          measureRecord(rec);
-        } else {
-          previous.delete(item.el);
-          rec.id = item.id;
-          if (dirty && dirty.has(item.id)) {
+      // 被摊平的祖先层由 expanded 管理，不能在「消失的单元」里被还原
+      const pinned = new Set();
+      if (blockMode) {
+        for (const entry of expanded.values()) for (const el of entry.chain) pinned.add(el);
+      }
+
+      function ensureUnit(el, id) {
+        let rec = previous.get(el);
+        if (rec) {
+          previous.delete(el);
+          if (dirty && dirty.has(id)) {
             adapter.setStyle(rec.el, 'max-height', '');
             measureRecord(rec);
           }
+          return rec;
         }
-        next.push(rec);
+        const gap = gapOf(el);
+        rec = { el, id, gap, height: 0, start: 0, tall: false, cache: '' };
+        styleItem(el);
+        measureRecord(rec);
+        return rec;
+      }
+
+      for (const item of items) {
+        const entry = blockMode ? expandItem(item.el) : null;
+        if (!entry) {
+          next.push(ensureUnit(item.el, item.id));
+          continue;
+        }
+        for (const el of entry.units) next.push(ensureUnit(el, item.id));
       }
 
       for (const [el, rec] of previous) {
+        if (pinned.has(el)) continue;
         if (el && el.isConnected) adapter.resetEl(el);
         if (rec.cache) rec.cache = '';
       }
@@ -444,9 +561,10 @@ DSHC.seamless = (() => {
 
     /* --------------------------------------------------------------- 应用 */
 
-    function apply(target, count, items) {
+    function apply(target, count, items, options) {
       column = target && target.column ? target.column : null;
       scroller = target && target.scroller ? target.scroller : null;
+      blockMode = !!(options && options.blockUnit);
       cols = Math.max(1, Math.min(3, Number(count) || 1));
       if (!column || !scroller || cols < 2) {
         restore();
@@ -527,6 +645,7 @@ DSHC.seamless = (() => {
       active = false;
       unbind();
       adapter.unfitContent();
+      collapseAll();
       for (const rec of records) {
         if (rec.el && rec.el.isConnected) adapter.resetEl(rec.el);
       }
@@ -554,6 +673,7 @@ DSHC.seamless = (() => {
         scroll: scroller ? Math.round(scroller.scrollTop) : 0,
         maxScroll: maxScroll(),
         items: records.length,
+        blockUnit: blockMode,
         tall: records.filter((rec) => rec.tall).length,
         hidden: document.querySelectorAll('[' + MARK.hide + '="b"]').length
       };

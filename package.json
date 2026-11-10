@@ -1,6 +1,6 @@
 {
   "name": "dsh-chat-columns-3",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "description": "DSH Web 会话多列阅读：原生 / 报纸 / 无缝 / 复制四种读法",
   "type": "module",
   "main": "lib/index.js",

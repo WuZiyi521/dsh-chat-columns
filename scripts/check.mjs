@@ -22,7 +22,7 @@ function note(message) {
 /* ------------------------------------------------------------ 1. 包契约 */
 
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-if (pkg.name !== 'dsh-chat-columns-3') fail('package.json name 必须是 dsh-chat-columns-3');
+if (pkg.name !== 'dsh-chat-columns') fail('package.json name 必须是 dsh-chat-columns');
 if (!/^\d+\.\d+\.\d+/.test(pkg.version || '')) fail('package.json version 不合法');
 if (pkg.main !== 'lib/index.js') fail('package.json main 必须是 lib/index.js');
 if (!pkg.exports || pkg.exports['./client'] !== './lib/client.js') fail('package.json 必须导出 ./client → lib/client.js');
@@ -31,7 +31,7 @@ if (pkg.dsh && pkg.dsh.client && pkg.dsh.client.platform !== 'web') fail('dsh.cl
 if (!pkg.dsh || !pkg.dsh.bundle || !pkg.dsh.bundle.patch) fail('package.json 缺少 dsh.bundle.patch');
 
 const patch = await readFile(join(root, 'cordis.patch.yml'), 'utf8');
-if (!patch.includes('dsh-chat-columns-3')) fail('cordis.patch.yml 没有引用包名');
+if (!patch.includes('dsh-chat-columns')) fail('cordis.patch.yml 没有引用包名');
 if (!patch.includes('chat-columns-3')) fail('cordis.patch.yml 缺少 bundle id');
 
 const hostEntry = await readFile(join(root, 'lib', 'index.js'), 'utf8');

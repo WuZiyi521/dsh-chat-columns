@@ -355,12 +355,7 @@
 
 [data-dshc-a] [data-dshc-item] {
   min-width: 0;
-  break-inside: avoid;
-  -webkit-column-break-inside: avoid;
-}
-
-/* 纯文字的长消息允许跨列（内容里含代码块/表格/媒体的消息不带这个标记） */
-[data-dshc-a] [data-dshc-item][data-dshc-long] {
+  /* 平分优先：所有消息都允许被列缝切开，列底才不会参差 */
   break-inside: auto;
   -webkit-column-break-inside: auto;
 }

@@ -9,7 +9,7 @@
 DSHC.app = (() => {
   'use strict';
 
-  const VERSION = '3.1.2';
+  const VERSION = '3.2.0';
   const SETTINGS_KEY = 'dshc-settings';
   const MODES = ['native', 'newspaper', 'seamless', 'mirror'];
   const COLS = ['auto', '1', '2', '3'];
@@ -266,8 +266,7 @@ DSHC.app = (() => {
     }
 
     if (state.mode === 'newspaper') {
-      // 结构变化立刻重排；流式增长稍等一会儿，别每批 token 都强制同步布局
-      newspaper.tune(change.structural ? 0 : 600);
+      newspaper.tune();
     } else if (state.mode === 'seamless') {
       seamless.update(itemsFromIndex(), change.dirty);
     } else if (state.mode === 'mirror') {

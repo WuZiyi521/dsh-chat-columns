@@ -408,7 +408,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.1.2');
+  assert.equal(data.diag.version, '3.2.0');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -568,26 +568,29 @@ step('报纸模式：列样式与标记就位', () => {
   assert.equal(data.mode, 'newspaper');
 });
 
-step('报纸模式：代码块整块保留（跨列只给纯文字），诊断可读', () => {
+step('报纸模式：所有内容可跨列，代码块的滚动容器被放开', () => {
   const data = read(`(() => {
     const diag = window.__dshc.diagnose().newspaper;
+    const pre = __fixture.rows[6].querySelector('pre');
     return {
       longMarks: __fixture.rows.filter((row) => row.hasAttribute('data-dshc-long')).length,
       applied: diag.applied,
-      ideal: diag.ideal,
-      capped: diag.capped,
+      items: diag.items,
       blank: diag.blank,
       height: diag.height,
-      hasEnds: Array.isArray(diag.columnsEnd) && diag.columnsEnd.length > 0
+      hasEnds: Array.isArray(diag.columnsEnd) && diag.columnsEnd.length > 0,
+      preOverflow: pre.style.getPropertyValue('overflow'),
+      preWrap: pre.style.getPropertyValue('white-space')
     };
   })()`);
-  assert.equal(data.longMarks, 0, '含代码块的消息不能被标成可跨列');
+  assert.equal(data.longMarks, 0, '不再需要给单条消息打标记');
   assert.equal(data.applied, true);
-  assert.ok(data.ideal > 0, '理想列高应可读');
-  assert.equal(typeof data.capped, 'number');
+  assert.equal(data.items, 7);
   assert.equal(typeof data.blank, 'number');
   assert.ok(data.height > 0);
   assert.equal(data.hasEnds, true);
+  assert.equal(data.preOverflow, 'visible', 'pre 的 overflow 必须放开，否则不可分片');
+  assert.equal(data.preWrap, 'pre-wrap', '长行改软换行，避免横向溢出');
 });
 
 step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {

@@ -112,51 +112,6 @@ DSHC.math = (() => {
     return { column, top: r - column * H };
   }
 
-  /**
-   * 报纸模式的排版计划：理想列高、可跨列的消息、需要限高的消息。
-   *
-   * 均衡分栏的列高 = 各列内容高的最大值。两件事会把列底撑出空白：
-   *  1. 一条消息整块放不进当前列 → 这一列底部留一截（低风险，可以靠「纯文字消息允许跨列」填上）；
-   *  2. 一条比一列还高的消息（长代码块）→ 所有列一起被顶到它那么高，其它列整屏空白。
-   * 所以：不含代码块/表格/媒体的长消息允许跨列；比 ideal×minRatio 还高的消息单独限高。
-   *
-   * @param {number[]} heights 每条消息的自然高度
-   * @param {number[]} gaps 每条消息上方的间距
-   * @param {number} columns 列数
-   * @param {boolean[]} [splittable] 这条消息是否允许跨列（含代码块/表格/媒体的不算）
-   * @param {{splitRatio?: number, splitFloor?: number, capRatio?: number, capTarget?: number, capFloor?: number}} [options]
-   * @returns {{ideal: number, splitLimit: number, cap: number, markLong: boolean[], candidates: number[]}}
-   */
-  function columnPlan(heights, gaps, columns, splittable, options) {
-    const N = Math.max(1, Number(columns) || 1);
-    const opts = options || {};
-    const splitRatio = opts.splitRatio === undefined ? 0.5 : opts.splitRatio;
-    const splitFloor = opts.splitFloor === undefined ? 320 : opts.splitFloor;
-    const capRatio = opts.capRatio === undefined ? 1.35 : opts.capRatio;
-    const capTarget = opts.capTarget === undefined ? 0.95 : opts.capTarget;
-    const capFloor = opts.capFloor === undefined ? 240 : opts.capFloor;
-
-    let total = 0;
-    for (let i = 0; i < heights.length; i += 1) {
-      total += Math.max(0, Number(heights[i]) || 0) + Math.max(0, Number(gaps && gaps[i]) || 0);
-    }
-    const ideal = Math.max(1, total / N);
-    const splitLimit = Math.max(splitFloor, ideal * splitRatio);
-    const cap = Math.max(capFloor, Math.round(ideal * capTarget));
-
-    const markLong = [];
-    const candidates = [];
-    for (let i = 0; i < heights.length; i += 1) {
-      const h = Number(heights[i]) || 0;
-      const canSplit = !splittable || splittable[i] !== false;
-      markLong.push(canSplit && h > splitLimit);
-      if (h > ideal * capRatio) candidates.push(i);
-    }
-    candidates.sort((a, b) => (Number(heights[b]) || 0) - (Number(heights[a]) || 0));
-
-    return { ideal, splitLimit, cap, markLong, candidates };
-  }
-
   /** 数值取整到 0.01，避免 transform 里的长小数。 */
   function round(value) {
     return Math.round((Number(value) || 0) * 100) / 100;
@@ -170,7 +125,6 @@ DSHC.math = (() => {
     fit,
     resolveColumns,
     columnWidth,
-    columnPlan,
     pack,
     project,
     round

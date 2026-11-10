@@ -359,6 +359,12 @@
   -webkit-column-break-inside: avoid;
 }
 
+/* 纯文字的长消息允许跨列（内容里含代码块/表格/媒体的消息不带这个标记） */
+[data-dshc-a] [data-dshc-item][data-dshc-long] {
+  break-inside: auto;
+  -webkit-column-break-inside: auto;
+}
+
 [data-dshc-a] pre,
 [data-dshc-a] table {
   max-width: 100%;

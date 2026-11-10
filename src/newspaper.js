@@ -28,6 +28,14 @@ DSHC.newspaper = (() => {
   const CAP_MIN_RATIO = 1.35;
   /** 这类消息的高度上限 = 理想列高 × 这个倍数（略小于一列，内容由它自己滚） */
   const CAP_TARGET = 0.95;
+  /** 纯文字消息超过理想列高的这个比例就允许跨列，用来把列底留白填平 */
+  const SPLIT_RATIO = 0.5;
+  const SPLIT_FLOOR = 320;
+  /**
+   * 这些内容不可分片：含它们的消息整块保留，绝不跨列（另加嵌套 flow，见 isSplittable）。
+   * 故意不含 svg：消息里的图标（按钮、状态标记）都是内联 svg，排掉它们等于所有消息都不能跨列。
+   */
+  const UNSPLITTABLE = 'pre, table, img, video, canvas, iframe';
 
   function create() {
     const adapter = DSHC.adapter;
@@ -38,7 +46,14 @@ DSHC.newspaper = (() => {
     let tuneRaf = 0;
     let tuneTimer = 0;
     let tuneCapped = 0;
+    let tuneLong = 0;
     let tuneIdeal = 0;
+
+    /** 不含代码块/表格/媒体的消息才允许跨列（跨列的代价是内容被列缝切开）。 */
+    function isSplittable(el) {
+      // 嵌套 flow（分组卡片）也不能拆
+      return !el.querySelector(UNSPLITTABLE + ', ' + adapter.HOST.column);
+    }
 
     function markedItems() {
       return column ? Array.from(column.querySelectorAll('[' + adapter.MARK.item + ']')) : [];
@@ -101,14 +116,28 @@ DSHC.newspaper = (() => {
       const gaps = [];
       for (const el of items) gaps.push(parseFloat(getComputedStyle(el).marginTop) || 0);
 
-      const plan = math.capPlan(heights, gaps, columns, {
-        minRatio: CAP_MIN_RATIO,
-        target: CAP_TARGET
+      const splittable = items.map(isSplittable);
+      const plan = math.columnPlan(heights, gaps, columns, splittable, {
+        splitRatio: SPLIT_RATIO,
+        splitFloor: SPLIT_FLOOR,
+        capRatio: CAP_MIN_RATIO,
+        capTarget: CAP_TARGET
       });
 
-      // 2) 比「一列」高得多的消息：列高会被它顶到它那么高，其它列下面就是整屏空白。
-      //    这类消息占不满一列也没关系——给它一列的高度上限，内容由它自己滚。
-      //    从最高的开始逐个套上限，直到列高回到理想值附近；最多 3 条，避免反复强制布局。
+      // 2) 纯文字的长消息允许跨列：读到列底就接下一列顶部，把列底留白填平。
+      let longCount = 0;
+      for (let i = 0; i < items.length; i += 1) {
+        if (plan.markLong[i]) {
+          adapter.setAttr(items[i], adapter.MARK.long, '');
+          longCount += 1;
+        } else {
+          items[i].removeAttribute(adapter.MARK.long);
+        }
+      }
+
+      // 3) 比「一列」高得多的消息（典型：长代码块，整块不可拆）：
+      //    列高会被它顶到它那么高，其它列下面就是整屏空白。
+      //    给它一列的高度上限，内容由它自己滚；最多 3 条，避免反复强制布局。
       const capped = new Set();
       let height = column.getBoundingClientRect().height;
       const queue = plan.candidates.slice(0, 3);
@@ -120,6 +149,7 @@ DSHC.newspaper = (() => {
         height = column.getBoundingClientRect().height;
       }
       tuneCapped = capped.size;
+      tuneLong = longCount;
       tuneIdeal = Math.round(plan.ideal);
     }
 
@@ -164,7 +194,7 @@ DSHC.newspaper = (() => {
         columns,
         height,
         ideal: tuneIdeal,
-        long: 0,
+        long: tuneLong,
         capped: tuneCapped,
         columnsEnd: columnsInfo,
         // 最大一列留白：列高 - 最矮那列的底
@@ -200,5 +230,5 @@ DSHC.newspaper = (() => {
     };
   }
 
-  return { create, RAIL, CAP_SLACK, CAP_MIN_RATIO, CAP_TARGET };
+  return { create, RAIL, CAP_SLACK, CAP_MIN_RATIO, CAP_TARGET, SPLIT_RATIO, SPLIT_FLOOR, UNSPLITTABLE };
 })();

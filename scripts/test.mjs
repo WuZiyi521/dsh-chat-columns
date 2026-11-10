@@ -98,31 +98,40 @@ test('任何情况下消息都不跨列', () => {
   }
 });
 
-console.log('math: 报纸限高计划');
+console.log('math: 报纸排版计划');
 
-test('巨型消息被挑出来限高（理想列高按内容总量算）', () => {
+test('巨型代码块：不跨列，改为限高（理想列高按内容总量算）', () => {
   const heights = [300, 300, 300, 300, 300, 300, 5000];
   const gaps = heights.map(() => 12);
-  const plan = math.capPlan(heights, gaps, 2, { minRatio: 1.35, target: 0.95 });
+  const splittable = heights.map(() => false); // 含代码块
+  const plan = math.columnPlan(heights, gaps, 2, splittable, { capRatio: 1.35, capTarget: 0.95 });
   assert.equal(Math.round(plan.ideal), 3442);
   assert.equal(plan.cap, 3270);
+  assert.deepEqual(Array.from(plan.markLong), [false, false, false, false, false, false, false]);
   assert.deepEqual(Array.from(plan.candidates), [6]);
 });
 
-test('普通消息不被限高（宁可留白也不套内部滚动条）', () => {
-  const plan = math.capPlan([300, 300], [0, 0], 2);
-  assert.equal(Math.round(plan.ideal), 300);
-  assert.equal(plan.cap, 285);
+test('纯文字长消息：允许跨列，用来填平列底', () => {
+  const heights = [300, 300, 300, 300, 300, 300, 5000];
+  const splittable = heights.map(() => true);
+  const plan = math.columnPlan(heights, heights.map(() => 12), 2, splittable, { splitRatio: 0.5 });
+  assert.equal(plan.markLong[6], true);
+  assert.equal(plan.candidates.length, 1, '仍然要限高，跨列和限高并不互斥');
+});
+
+test('普通消息既不跨列也不限高', () => {
+  const plan = math.columnPlan([300, 300], [0, 0], 2, [true, true]);
+  assert.deepEqual(Array.from(plan.markLong), [false, false]);
   assert.deepEqual(Array.from(plan.candidates), []);
 });
 
 test('单列时不限高', () => {
-  const plan = math.capPlan([100, 2000], [0, 0], 1);
+  const plan = math.columnPlan([100, 2000], [0, 0], 1, [true, true]);
   assert.deepEqual(Array.from(plan.candidates), []);
 });
 
 test('多条巨型消息按高度从高到低排队', () => {
-  const plan = math.capPlan([500, 500, 12000, 11000], [0, 0, 0, 0], 3);
+  const plan = math.columnPlan([500, 500, 12000, 11000], [0, 0, 0, 0], 3, [false, false, false, false]);
   assert.deepEqual(Array.from(plan.candidates), [2, 3]);
 });
 

@@ -178,7 +178,7 @@ class El {
   }
   dispatchEvent() {}
   matches(selector) {
-    return matchesSelector(this, selector);
+    return String(selector).split(',').some((part) => matchesSelector(this, part));
   }
   closest(selector) {
     let node = this;
@@ -189,10 +189,12 @@ class El {
     return null;
   }
   querySelector(selector) {
-    return collect(this, []).find((node) => matchesSelector(node, selector)) || null;
+    const parts = String(selector).split(',');
+    return collect(this, []).find((node) => parts.some((part) => matchesSelector(node, part))) || null;
   }
   querySelectorAll(selector) {
-    return collect(this, []).filter((node) => matchesSelector(node, selector));
+    const parts = String(selector).split(',');
+    return collect(this, []).filter((node) => parts.some((part) => matchesSelector(node, part)));
   }
   getBoundingClientRect() {
     if (this.rect) return { ...this.rect };
@@ -406,7 +408,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.1.1');
+  assert.equal(data.diag.version, '3.1.2');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -494,7 +496,9 @@ run(`
 
     // 一条比列高得多的巨型块：报纸模式必须把它标成可跨列、并限高
     const tall = el('div', { 'data-chat-flow-key': 'm6', 'data-chat-flow-kind': 'assistant' });
-    tall.textContent = '一段很长的代码块';
+    const pre = document.createElement('pre');
+    pre.textContent = '1 2 3';
+    tall.append(pre);
     tall.rect = { top: 116 + 6 * 312, left: 32, right: 1168, bottom: 116 + 6 * 312 + 5000, width: 1136, height: 5000 };
     tall.computed = { marginTop: '12px' };
     rows.push(tall);
@@ -564,7 +568,7 @@ step('报纸模式：列样式与标记就位', () => {
   assert.equal(data.mode, 'newspaper');
 });
 
-step('报纸模式：消息绝不跨列，诊断可读', () => {
+step('报纸模式：代码块整块保留（跨列只给纯文字），诊断可读', () => {
   const data = read(`(() => {
     const diag = window.__dshc.diagnose().newspaper;
     return {
@@ -577,7 +581,7 @@ step('报纸模式：消息绝不跨列，诊断可读', () => {
       hasEnds: Array.isArray(diag.columnsEnd) && diag.columnsEnd.length > 0
     };
   })()`);
-  assert.equal(data.longMarks, 0, '不再给消息打「可跨列」标记（避免多列分裂渲染错位）');
+  assert.equal(data.longMarks, 0, '含代码块的消息不能被标成可跨列');
   assert.equal(data.applied, true);
   assert.ok(data.ideal > 0, '理想列高应可读');
   assert.equal(typeof data.capped, 'number');

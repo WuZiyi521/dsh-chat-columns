@@ -9,7 +9,7 @@
 DSHC.app = (() => {
   'use strict';
 
-  const VERSION = '3.3.1';
+  const VERSION = '3.3.2';
   const SETTINGS_KEY = 'dshc-settings';
   const MODES = ['native', 'newspaper', 'seamless', 'mirror'];
   const COLS = ['auto', '1', '2', '3'];

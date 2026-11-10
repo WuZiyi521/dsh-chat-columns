@@ -80,6 +80,7 @@ DSHC.controller = (() => {
     const onColumns = options.onColumns || function noop() {};
     const onAutoLoad = options.onAutoLoad || function noop() {};
     const onVariant = options.onVariant || function noop() {};
+    const onPageStep = options.onPageStep || function noop() {};
     const onLoadEarlier = options.onLoadEarlier || function noop() {};
     const onRetry = options.onRetry || function noop() {};
 
@@ -159,6 +160,24 @@ DSHC.controller = (() => {
     });
     variantGroup.append(variantLabel, variantBox);
 
+    const stepGroup = el('div', 'dshc-group', { 'data-role': 'step-group' });
+    const stepLabel = el('span', 'dshc-label', { id: 'dshc-label-step' });
+    stepLabel.textContent = '每页列数';
+    const stepBox = el('div', 'dshc-seg', { role: 'group', 'aria-labelledby': 'dshc-label-step', 'data-role': 'steps' });
+    const stepValues = [
+      ['screen', '一屏'],
+      ['1', '1'],
+      ['2', '2'],
+      ['3', '3']
+    ];
+    const stepButtons = stepValues.map(([value, label]) => {
+      const button = el('button', null, { type: 'button', 'data-step': value, 'aria-pressed': 'false' });
+      button.textContent = label;
+      stepBox.appendChild(button);
+      return button;
+    });
+    stepGroup.append(stepLabel, stepBox);
+
     const autoGroup = el('div', 'dshc-group', { 'data-role': 'auto-group' });
     const autoLabel = el('label', 'dshc-switch');
     const autoInput = el('input', null, { type: 'checkbox', 'data-role': 'auto' });
@@ -180,7 +199,7 @@ DSHC.controller = (() => {
     const note = el('div', 'dshc-note', { 'data-role': 'note' });
     note.hidden = true;
 
-    panel.append(head, modesGroup, colsGroup, variantGroup, autoGroup, status, actions, note);
+    panel.append(head, modesGroup, colsGroup, variantGroup, stepGroup, autoGroup, status, actions, note);
     wrap.append(toggle, panel);
 
     // 顶部手动「加载更早」悬浮胶囊：报纸默认手动、无缝关闭自动加载时的唯一入口。
@@ -311,6 +330,11 @@ DSHC.controller = (() => {
 
       autoGroup.hidden = mode === 'native';
       variantGroup.hidden = mode !== 'seamless';
+      stepGroup.hidden = mode !== 'seamless' || current.variant === 'vertical';
+      for (const button of stepButtons) {
+        const value = button.getAttribute('data-step');
+        button.setAttribute('aria-pressed', value === String(current.pageStep) ? 'true' : 'false');
+      }
       for (const button of variantButtons) {
         const value = button.getAttribute('data-variant');
         button.setAttribute('aria-pressed', value === String(current.variant) ? 'true' : 'false');
@@ -371,6 +395,9 @@ DSHC.controller = (() => {
     autoInput.addEventListener('change', () => onAutoLoad(autoInput.checked));
     for (const button of variantButtons) {
       button.addEventListener('click', () => onVariant(button.getAttribute('data-variant')));
+    }
+    for (const button of stepButtons) {
+      button.addEventListener('click', () => onPageStep(button.getAttribute('data-step')));
     }
     earlierBtn.addEventListener('click', () => onLoadEarlier());
     retryBtn.addEventListener('click', () => onRetry());

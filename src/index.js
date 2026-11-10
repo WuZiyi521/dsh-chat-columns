@@ -9,12 +9,13 @@
 DSHC.app = (() => {
   'use strict';
 
-  const VERSION = '3.5.0';
+  const VERSION = '3.5.1';
   const SETTINGS_KEY = 'dshc-settings';
   const MODES = ['native', 'newspaper', 'seamless', 'mirror'];
   const COLS = ['auto', '1', '2', '3'];
   const MOBILE_QUERY = '(max-width: 767px)';
   const VARIANTS = ['vertical', 'horizontal', 'paged'];
+  const STEPS = ['screen', '1', '2', '3'];
   const DEFAULT_AUTO = { newspaper: false, seamless: true, mirror: true };
 
   const state = {
@@ -22,6 +23,7 @@ DSHC.app = (() => {
     cols: 'auto',
     autoLoad: Object.assign({}, DEFAULT_AUTO),
     variant: 'vertical',
+    pageStep: 'screen',
     resolved: 1
   };
 
@@ -67,6 +69,7 @@ DSHC.app = (() => {
       mode: MODES.indexOf(value.mode) >= 0 ? value.mode : 'native',
       cols: COLS.indexOf(String(value.cols)) >= 0 ? String(value.cols) : 'auto',
       variant: VARIANTS.indexOf(value.variant) >= 0 ? value.variant : 'vertical',
+      pageStep: STEPS.indexOf(String(value.pageStep)) >= 0 ? String(value.pageStep) : 'screen',
       autoLoad: {
         newspaper: auto.newspaper === undefined ? DEFAULT_AUTO.newspaper : !!auto.newspaper,
         seamless: auto.seamless === undefined ? DEFAULT_AUTO.seamless : !!auto.seamless,
@@ -84,6 +87,7 @@ DSHC.app = (() => {
           mode: state.mode,
           cols: state.cols,
           variant: state.variant,
+          pageStep: state.pageStep,
           autoLoadHistory: state.autoLoad
         })
       );
@@ -126,6 +130,7 @@ DSHC.app = (() => {
       resolved: state.resolved,
       autoLoad: autoFor(state.mode),
       variant: state.variant,
+      pageStep: state.pageStep,
       pageInfo: state.mode === 'seamless' && state.variant !== 'vertical' && paged ? paged.diagnose() : null,
       mobile: isMobile(),
       enhanced: !!(target.scroller && target.column) && target.reason !== 'ambiguous',
@@ -249,7 +254,10 @@ DSHC.app = (() => {
         const ok =
           state.variant === 'vertical'
             ? seamless.apply(target, state.resolved, items)
-            : paged.apply(target, state.resolved, { progress: state.variant === 'horizontal' ? 'linear' : 'page' });
+            : paged.apply(target, state.resolved, {
+                progress: state.variant === 'horizontal' ? 'linear' : 'page',
+                stepCols: state.pageStep === 'screen' ? state.resolved : Number(state.pageStep)
+              });
         if (!ok) note = state.variant === 'vertical' ? '无缝模式初始化失败，已退回原生' : '横向/翻页无缝初始化失败，已退回原生';
       }
     } else if (state.mode === 'mirror') {
@@ -376,7 +384,10 @@ DSHC.app = (() => {
       }
       if (state.mode === 'seamless') {
         if (state.variant !== 'vertical') {
-          paged.apply(target, state.resolved, { progress: state.variant === 'horizontal' ? 'linear' : 'page' });
+          paged.apply(target, state.resolved, {
+            progress: state.variant === 'horizontal' ? 'linear' : 'page',
+            stepCols: state.pageStep === 'screen' ? state.resolved : Number(state.pageStep)
+          });
         } else {
           seamless.relayout();
         }
@@ -438,6 +449,15 @@ DSHC.app = (() => {
     render();
   }
 
+  function setPageStep(value) {
+    const next = String(value);
+    if (STEPS.indexOf(next) < 0 || next === state.pageStep) return;
+    state.pageStep = next;
+    writeSettings();
+    if (state.mode === 'seamless') applyMode();
+    else render();
+  }
+
   function setVariant(value) {
     const next = String(value);
     if (VARIANTS.indexOf(next) < 0 || next === state.variant) return;
@@ -497,6 +517,7 @@ DSHC.app = (() => {
     state.cols = settings.cols;
     state.autoLoad = settings.autoLoad;
     state.variant = settings.variant;
+    state.pageStep = settings.pageStep;
 
     injectStyles();
 
@@ -527,6 +548,7 @@ DSHC.app = (() => {
       onColumns: setColumns,
       onAutoLoad: setAutoLoad,
       onVariant: setVariant,
+      onPageStep: setPageStep,
       onLoadEarlier: loadEarlier,
       onRetry: () => {
         if (history) history.retry();
@@ -687,6 +709,7 @@ DSHC.app = (() => {
     setColumns,
     setAutoLoad,
     setVariant,
+    setPageStep,
     nextPage,
     prevPage,
     setPage,
@@ -730,6 +753,7 @@ DSHC.app = (() => {
       setColumns,
       setAutoLoad,
       setVariant,
+      setPageStep,
       nextPage,
       prevPage,
       setPage,

@@ -35,6 +35,9 @@ DSHC.paged = (() => {
     let step = 0; // 一列 + 间距
     let pages = 1;
     let page = 0;
+    /** 一次翻几列（默认 = 一屏列数） */
+    let stepCols = 1;
+    let wantedStep = 0;
     /** 'page' = 竖向滚轮整页翻；'linear' = 竖向滚轮线性横向走 */
     let progress = 'page';
 
@@ -75,7 +78,8 @@ DSHC.paged = (() => {
       });
       const total = column.getBoundingClientRect().height;
       totalCols = Math.max(1, Math.ceil((total || 0) / Math.max(1, H)));
-      pages = Math.max(1, Math.ceil(totalCols / Math.max(1, cols)));
+      stepCols = Math.max(1, Math.min(cols, Number(wantedStep) || cols));
+      recalcPages();
 
       // 2) 纸带：所有列横向排开，交给宿主横向滚动
       adapter.setStyles(column, {
@@ -111,7 +115,17 @@ DSHC.paged = (() => {
     }
 
     function pageWidth() {
-      return step * Math.max(1, cols);
+      return step * Math.max(1, stepCols);
+    }
+
+    /** 纸带能滚到的最大左偏移（最后一屏刚好贴右） */
+    function maxLeft() {
+      return Math.max(0, (totalCols - Math.max(1, cols)) * step);
+    }
+
+    function recalcPages() {
+      const width = Math.max(1, pageWidth());
+      pages = Math.max(1, Math.floor(maxLeft() / width) + 1);
     }
 
     function maxScroll() {
@@ -122,7 +136,7 @@ DSHC.paged = (() => {
 
     function currentPage() {
       if (!host || !pageWidth()) return 0;
-      return Math.round(host.scrollLeft / pageWidth());
+      return Math.max(0, Math.min(pages - 1, Math.round(host.scrollLeft / pageWidth())));
     }
 
     function clampPage(value) {
@@ -133,7 +147,7 @@ DSHC.paged = (() => {
     function goTo(next) {
       if (!host) return;
       const target = clampPage(next);
-      const left = Math.min(maxScroll(), target * pageWidth());
+      const left = Math.min(maxLeft(), target * pageWidth());
       if (typeof host.scrollTo === 'function') {
         try {
           host.scrollTo({ left, behavior: 'smooth' });
@@ -168,6 +182,8 @@ DSHC.paged = (() => {
     function ownsScroll(event) {
       let node = event && event.target;
       while (node && node !== scroller) {
+        // 纸带外层本来就可横向滚，不能把它当成「自己会滚、别抢」的区域
+        if (node === host) return false;
         if (node.nodeType === 1) {
           if (node.matches && node.matches(adapter.HOST.composer)) return true;
           const cs = getComputedStyle(node);
@@ -304,6 +320,7 @@ DSHC.paged = (() => {
       scroller = target && target.scroller ? target.scroller : null;
       cols = Math.max(1, Math.min(3, Number(count) || 1));
       progress = options && options.progress === 'linear' ? 'linear' : 'page';
+      wantedStep = options && options.stepCols ? Number(options.stepCols) : 0;
       if (!column || !scroller) {
         restore();
         return false;
@@ -358,6 +375,7 @@ DSHC.paged = (() => {
       return {
         active,
         progress,
+        stepCols,
         H,
         cols,
         columnWidth: colW,

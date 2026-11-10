@@ -81,7 +81,7 @@ DSHC.newspaper = (() => {
     }
 
     /**
-     * 按「理想列高」重排可跨列/需限高的消息，把底部留白压到最小。
+     * 按「理想列高」给过高的消息限高，把底部留白压到最小。
      * 幂等：每次先量自然高度（撤掉上一次加的上限），再重新判定。
      */
     function tune() {
@@ -100,8 +100,6 @@ DSHC.newspaper = (() => {
       for (const el of items) heights.push(el.getBoundingClientRect().height);
       const gaps = [];
       for (const el of items) gaps.push(parseFloat(getComputedStyle(el).marginTop) || 0);
-      let total = 0;
-      for (let i = 0; i < items.length; i += 1) total += heights[i] + gaps[i];
 
       const plan = math.capPlan(heights, gaps, columns, {
         minRatio: CAP_MIN_RATIO,

@@ -528,6 +528,61 @@ DSHC.adapter = (() => {
     return root;
   }
 
+  /* -------------------------------------------------- 内容适配（A/B 共用） */
+
+  /** 被「内容适配」改过的节点，退出时统一还原。 */
+  const contentTouched = new Set();
+
+  /**
+   * 把列里的内容调成「可被列缝切开、且不超出列宽」：
+   *  - `pre` 是滚动容器（overflow-x:auto），滚动容器不可分片 → 代码块会整块搬家；
+   *    放开 overflow 并让长行软换行；
+   *  - 代码块/表格外面那层卡片常带 overflow:hidden（圆角裁切），也会阻止分片；
+   *  - 宿主有「宽表撑出正文列」的样式（宽度按 100cqw 算），多列里 cqw 取的是滚动容器宽度，
+   *    不夹住就会整张表出列 → 强制 table-layout:fixed + 100% 宽。
+   * @param {HTMLElement} root 正文列（或任一容器）
+   */
+  function fitContent(root) {
+    if (!root) return;
+    const touch = (el, name, value) => {
+      setStyle(el, name, value);
+      contentTouched.add(el);
+    };
+    for (const pre of root.querySelectorAll('pre')) {
+      touch(pre, 'overflow', 'visible');
+      touch(pre, 'overflow-x', 'visible');
+      touch(pre, 'overflow-y', 'visible');
+      touch(pre, 'white-space', 'pre-wrap');
+      touch(pre, 'word-break', 'break-word');
+      const card = pre.parentElement;
+      if (card && card !== root) {
+        touch(card, 'overflow', 'visible');
+        touch(card, 'max-height', 'none');
+      }
+    }
+    for (const table of root.querySelectorAll('table')) {
+      const wrap = table.parentElement;
+      if (wrap && wrap !== root) {
+        touch(wrap, 'width', '100%');
+        touch(wrap, 'max-width', '100%');
+        touch(wrap, 'margin-left', '0');
+        touch(wrap, 'padding-left', '0');
+        touch(wrap, 'overflow', 'visible');
+      }
+      touch(table, 'table-layout', 'fixed');
+      touch(table, 'width', '100%');
+      touch(table, 'max-width', '100%');
+    }
+  }
+
+  /** 还原所有「内容适配」改动；幂等。 */
+  function unfitContent() {
+    for (const el of Array.from(contentTouched)) {
+      if (el && el.isConnected) resetEl(el);
+      contentTouched.delete(el);
+    }
+  }
+
   /* ------------------------------------------------------------ 启动兜底 */
 
   /**
@@ -587,6 +642,8 @@ DSHC.adapter = (() => {
     captureAnchor,
     restoreAnchor,
     sanitize,
+    fitContent,
+    unfitContent,
     watchForScroller
   };
 })();

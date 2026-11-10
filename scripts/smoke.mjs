@@ -408,7 +408,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.2.0');
+  assert.equal(data.diag.version, '3.2.1');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -504,6 +504,14 @@ run(`
     rows.push(tall);
     slot.append(tall);
 
+    // 宿主那种「宽表撑出正文列」的结构：外层带左 padding，表格靠它出列
+    const wide = el('div', { 'data-test-wide': '' });
+    wide.computed = { paddingLeft: '120px' };
+    const table = document.createElement('table');
+    table.textContent = 'cell';
+    wide.append(table);
+    rows[0].append(wide);
+
     const olderWrap = el('div');
     const olderBtn = document.createElement('button');
     olderBtn.textContent = '加载更早';
@@ -580,7 +588,10 @@ step('报纸模式：所有内容可跨列，代码块的滚动容器被放开',
       height: diag.height,
       hasEnds: Array.isArray(diag.columnsEnd) && diag.columnsEnd.length > 0,
       preOverflow: pre.style.getPropertyValue('overflow'),
-      preWrap: pre.style.getPropertyValue('white-space')
+      preWrap: pre.style.getPropertyValue('white-space'),
+      widePad: __fixture.rows[0].querySelector('div').style.getPropertyValue('padding-left'),
+      tableLayout: __fixture.rows[0].querySelector('table').style.getPropertyValue('table-layout'),
+      tableWidth: __fixture.rows[0].querySelector('table').style.getPropertyValue('width')
     };
   })()`);
   assert.equal(data.longMarks, 0, '不再需要给单条消息打标记');
@@ -591,6 +602,9 @@ step('报纸模式：所有内容可跨列，代码块的滚动容器被放开',
   assert.equal(data.hasEnds, true);
   assert.equal(data.preOverflow, 'visible', 'pre 的 overflow 必须放开，否则不可分片');
   assert.equal(data.preWrap, 'pre-wrap', '长行改软换行，避免横向溢出');
+  assert.equal(data.widePad, '0', '宽表外层的撑出 padding 必须归零');
+  assert.equal(data.tableLayout, 'fixed', '表格改成定宽布局，才夹得住');
+  assert.equal(data.tableWidth, '100%');
 });
 
 step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
@@ -677,6 +691,7 @@ step('切回原生：宿主全部还原', () => {
       overlay: document.querySelector('section[data-mode=mirror]').hidden,
       preOverflow: __fixture.rows[6].querySelector('pre').style.getPropertyValue('overflow'),
       preWrap: __fixture.rows[6].querySelector('pre').style.getPropertyValue('white-space'),
+      tableLayout: __fixture.rows[0].querySelector('table').style.getPropertyValue('table-layout'),
       mode: window.__dshc.getState().mode
     };
   })()`);
@@ -687,6 +702,7 @@ step('切回原生：宿主全部还原', () => {
   assert.equal(data.overlay, true);
   assert.equal(data.preOverflow, '', '代码块上的 overflow 放开也要还原');
   assert.equal(data.preWrap, '', '代码块上的软换行也要还原');
+  assert.equal(data.tableLayout, '', '表格的定宽布局也要还原');
   assert.equal(data.mode, 'native');
 });
 

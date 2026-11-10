@@ -354,6 +354,7 @@ DSHC.seamless = (() => {
       try {
         const anchor = captureAnchor();
         syncItems(items, dirty);
+        adapter.fitContent(column);
         place();
         observeItems();
         if (anchor && anchor.rec.el && anchor.rec.el.isConnected) restoreAnchor(anchor);
@@ -461,6 +462,7 @@ DSHC.seamless = (() => {
       applying = true;
       try {
         syncItems(items || [], null);
+        adapter.fitContent(column);
         measureAll();
         place();
         active = true;
@@ -499,6 +501,7 @@ DSHC.seamless = (() => {
           if (rec.el && rec.el.isConnected) styleItem(rec.el);
         }
         syncItems(readItems(), null);
+        adapter.fitContent(column);
         measureAll();
         place();
         observeItems();
@@ -523,6 +526,7 @@ DSHC.seamless = (() => {
     function restore() {
       active = false;
       unbind();
+      adapter.unfitContent();
       for (const rec of records) {
         if (rec.el && rec.el.isConnected) adapter.resetEl(rec.el);
       }

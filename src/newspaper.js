@@ -30,32 +30,6 @@ DSHC.newspaper = (() => {
     }
 
     /**
-     * 放开不可分片的块：
-     *  - pre 是滚动容器（overflow-x:auto）→ 浏览器无法在它内部断列，只能整块搬家；
-     *  - 外面那层卡片常带 overflow:hidden（圆角裁切），同样是不可分片。
-     * 放开之后 `white-space: pre-wrap` 保证长行不会横向溢出。
-     */
-    function relaxBlocks() {
-      if (!column) return;
-      for (const pre of column.querySelectorAll('pre')) {
-        adapter.setStyle(pre, 'overflow', 'visible');
-        adapter.setStyle(pre, 'overflow-x', 'visible');
-        adapter.setStyle(pre, 'overflow-y', 'visible');
-        adapter.setStyle(pre, 'white-space', 'pre-wrap');
-        adapter.setStyle(pre, 'word-break', 'break-word');
-        const card = pre.parentElement;
-        if (card && card !== column) {
-          adapter.setStyle(card, 'overflow', 'visible');
-          adapter.setStyle(card, 'max-height', 'none');
-        }
-      }
-      for (const table of column.querySelectorAll('table')) {
-        const wrap = table.parentElement;
-        if (wrap && wrap !== column) adapter.setStyle(wrap, 'overflow', 'visible');
-      }
-    }
-
-    /**
      * 应用均衡分栏。columns < 2 时退回原生。
      * @returns {boolean} 是否真的分成多列
      */
@@ -86,7 +60,7 @@ DSHC.newspaper = (() => {
         adapter.setAttr(item.el, adapter.MARK.item, '');
       }
 
-      relaxBlocks();
+      adapter.fitContent(column);
       applied = true;
       return true;
     }
@@ -94,7 +68,7 @@ DSHC.newspaper = (() => {
     /** 结构变化时补一次：流式 / 加载更早之后新出现的代码块也要放开。 */
     function tune() {
       if (!applied) return;
-      relaxBlocks();
+      adapter.fitContent(column);
     }
 
     /** 诊断：列数、列高、每列内容底、最大留白。 */
@@ -126,18 +100,9 @@ DSHC.newspaper = (() => {
     }
 
     function restore() {
+      adapter.unfitContent();
       for (const item of markedItems()) adapter.resetEl(item);
-      if (column) {
-        // 代码块/表格上放开的 overflow 也要还原
-        for (const pre of column.querySelectorAll('pre')) {
-          adapter.resetEl(pre);
-          if (pre.parentElement && pre.parentElement !== column) adapter.resetEl(pre.parentElement);
-        }
-        for (const table of column.querySelectorAll('table')) {
-          if (table.parentElement && table.parentElement !== column) adapter.resetEl(table.parentElement);
-        }
-        adapter.resetEl(column);
-      }
+      if (column) adapter.resetEl(column);
       applied = false;
     }
 

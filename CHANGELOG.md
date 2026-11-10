@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 3.2.1 — 2026-11-11
+
+### 修复：表格过长直接出列
+
+- 根因：宿主有「宽表撑出正文列」的样式（`.md-table-wide` 用 `100cqw` 计算宽度并加负 margin/padding），
+  在多列里 `100cqw` 取的是**滚动容器**宽度，于是表格比列宽得多，整张表出列；3.2.0 又把表格外层
+  `overflow` 放开了，连最后的横向约束也没了。
+- 修法：把内容适配抽成 `adapter.fitContent()/unfitContent()`，报纸与无缝共用：
+  表格强制 `table-layout: fixed` + 100% 宽，外层卡片把撑出去的 `margin-left/padding-left` 归零；
+  单元格长串用 `overflow-wrap: anywhere` 断行。代码块仍按 3.2.0 放开 overflow + 软换行。
+- 退出/切模式时这些样式随快照一起还原（冒烟里加了断言）。
+
 ## 3.2.0 — 2026-11-11
 
 ### 报纸：改成真·平分，代码块也跨列

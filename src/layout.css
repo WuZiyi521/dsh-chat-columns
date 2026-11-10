@@ -365,6 +365,12 @@
   max-width: 100%;
 }
 
+/* 表格夹回列内之后，单元格里的长串（URL、路径、token）要能断行 */
+[data-dshc-a] td,
+[data-dshc-a] th {
+  overflow-wrap: anywhere;
+}
+
 [data-dshc-a] pre {
   overflow-x: auto;
 }

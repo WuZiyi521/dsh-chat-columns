@@ -79,7 +79,7 @@ DSHC.controller = (() => {
     const onMode = options.onMode || function noop() {};
     const onColumns = options.onColumns || function noop() {};
     const onAutoLoad = options.onAutoLoad || function noop() {};
-    const onPaged = options.onPaged || function noop() {};
+    const onVariant = options.onVariant || function noop() {};
     const onLoadEarlier = options.onLoadEarlier || function noop() {};
     const onRetry = options.onRetry || function noop() {};
 
@@ -142,14 +142,22 @@ DSHC.controller = (() => {
     });
     colsGroup.append(colsLabel, colsBox);
 
-    const pagedGroup = el('div', 'dshc-group', { 'data-role': 'paged-group' });
-    const pagedLabel = el('label', 'dshc-switch');
-    const pagedInput = el('input', null, { type: 'checkbox', 'data-role': 'paged' });
-    const pagedUi = el('span', 'dshc-switch-ui', { 'aria-hidden': 'true' });
-    const pagedText = el('span', 'dshc-switch-text');
-    pagedText.textContent = '翻页式（实验：一屏 N 列，滚动翻页）';
-    pagedLabel.append(pagedInput, pagedUi, pagedText);
-    pagedGroup.appendChild(pagedLabel);
+    const variantGroup = el('div', 'dshc-group', { 'data-role': 'variant-group' });
+    const variantLabel = el('span', 'dshc-label', { id: 'dshc-label-variant' });
+    variantLabel.textContent = '滚动方式';
+    const variantBox = el('div', 'dshc-seg', { role: 'group', 'aria-labelledby': 'dshc-label-variant', 'data-role': 'variants' });
+    const variantValues = [
+      ['vertical', '竖向'],
+      ['horizontal', '横向'],
+      ['paged', '翻页']
+    ];
+    const variantButtons = variantValues.map(([value, label]) => {
+      const button = el('button', null, { type: 'button', 'data-variant': value, 'aria-pressed': 'false' });
+      button.textContent = label;
+      variantBox.appendChild(button);
+      return button;
+    });
+    variantGroup.append(variantLabel, variantBox);
 
     const autoGroup = el('div', 'dshc-group', { 'data-role': 'auto-group' });
     const autoLabel = el('label', 'dshc-switch');
@@ -172,7 +180,7 @@ DSHC.controller = (() => {
     const note = el('div', 'dshc-note', { 'data-role': 'note' });
     note.hidden = true;
 
-    panel.append(head, modesGroup, colsGroup, autoGroup, pagedGroup, status, actions, note);
+    panel.append(head, modesGroup, colsGroup, variantGroup, autoGroup, status, actions, note);
     wrap.append(toggle, panel);
 
     // 顶部手动「加载更早」悬浮胶囊：报纸默认手动、无缝关闭自动加载时的唯一入口。
@@ -247,7 +255,8 @@ DSHC.controller = (() => {
       }
       const page = current.pageInfo;
       if (page && page.active) {
-        return '无缝（翻页） ' + page.cols + ' 列 · 第 ' + (page.page + 1) + '/' + page.pages + ' 页';
+        const how = current.variant === 'horizontal' ? '横向' : '翻页';
+        return '无缝（' + how + '） ' + page.cols + ' 列 · 第 ' + (page.page + 1) + '/' + page.pages + ' 页';
       }
       return modeLabel(current.mode) + ' ' + current.resolved + ' 列 · ' + historyText;
     }
@@ -301,8 +310,11 @@ DSHC.controller = (() => {
       }
 
       autoGroup.hidden = mode === 'native';
-      pagedGroup.hidden = mode !== 'seamless';
-      pagedInput.checked = !!current.paged;
+      variantGroup.hidden = mode !== 'seamless';
+      for (const button of variantButtons) {
+        const value = button.getAttribute('data-variant');
+        button.setAttribute('aria-pressed', value === String(current.variant) ? 'true' : 'false');
+      }
       autoInput.checked = !!current.autoLoad;
       autoText.textContent = '到顶自动加载更早（' + modeLabel(mode) + '）';
 
@@ -357,7 +369,9 @@ DSHC.controller = (() => {
     }
 
     autoInput.addEventListener('change', () => onAutoLoad(autoInput.checked));
-    pagedInput.addEventListener('change', () => onPaged(pagedInput.checked));
+    for (const button of variantButtons) {
+      button.addEventListener('click', () => onVariant(button.getAttribute('data-variant')));
+    }
     earlierBtn.addEventListener('click', () => onLoadEarlier());
     retryBtn.addEventListener('click', () => onRetry());
     pill.addEventListener('click', () => onLoadEarlier());

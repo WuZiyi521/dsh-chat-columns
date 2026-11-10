@@ -9,18 +9,19 @@
 DSHC.app = (() => {
   'use strict';
 
-  const VERSION = '3.4.0';
+  const VERSION = '3.5.0';
   const SETTINGS_KEY = 'dshc-settings';
   const MODES = ['native', 'newspaper', 'seamless', 'mirror'];
   const COLS = ['auto', '1', '2', '3'];
   const MOBILE_QUERY = '(max-width: 767px)';
+  const VARIANTS = ['vertical', 'horizontal', 'paged'];
   const DEFAULT_AUTO = { newspaper: false, seamless: true, mirror: true };
 
   const state = {
     mode: 'native',
     cols: 'auto',
     autoLoad: Object.assign({}, DEFAULT_AUTO),
-    paged: false,
+    variant: 'vertical',
     resolved: 1
   };
 
@@ -65,7 +66,7 @@ DSHC.app = (() => {
     return {
       mode: MODES.indexOf(value.mode) >= 0 ? value.mode : 'native',
       cols: COLS.indexOf(String(value.cols)) >= 0 ? String(value.cols) : 'auto',
-      paged: !!value.paged,
+      variant: VARIANTS.indexOf(value.variant) >= 0 ? value.variant : 'vertical',
       autoLoad: {
         newspaper: auto.newspaper === undefined ? DEFAULT_AUTO.newspaper : !!auto.newspaper,
         seamless: auto.seamless === undefined ? DEFAULT_AUTO.seamless : !!auto.seamless,
@@ -82,7 +83,7 @@ DSHC.app = (() => {
           v: 1,
           mode: state.mode,
           cols: state.cols,
-          paged: state.paged,
+          variant: state.variant,
           autoLoadHistory: state.autoLoad
         })
       );
@@ -124,8 +125,8 @@ DSHC.app = (() => {
       columns: state.cols,
       resolved: state.resolved,
       autoLoad: autoFor(state.mode),
-      paged: !!state.paged,
-      pageInfo: state.mode === 'seamless' && state.paged && paged ? paged.diagnose() : null,
+      variant: state.variant,
+      pageInfo: state.mode === 'seamless' && state.variant !== 'vertical' && paged ? paged.diagnose() : null,
       mobile: isMobile(),
       enhanced: !!(target.scroller && target.column) && target.reason !== 'ambiguous',
       reason: target.reason,
@@ -245,10 +246,11 @@ DSHC.app = (() => {
         note = '当前宽度只够 1 列';
       } else {
         hideHostOlder(true);
-        const ok = state.paged
-          ? paged.apply(target, state.resolved)
-          : seamless.apply(target, state.resolved, items);
-        if (!ok) note = state.paged ? '翻页式无缝初始化失败，已退回原生' : '无缝模式初始化失败，已退回原生';
+        const ok =
+          state.variant === 'vertical'
+            ? seamless.apply(target, state.resolved, items)
+            : paged.apply(target, state.resolved, { progress: state.variant === 'horizontal' ? 'linear' : 'page' });
+        if (!ok) note = state.variant === 'vertical' ? '无缝模式初始化失败，已退回原生' : '横向/翻页无缝初始化失败，已退回原生';
       }
     } else if (state.mode === 'mirror') {
       hideHostOlder(true);
@@ -278,7 +280,7 @@ DSHC.app = (() => {
     if (state.mode === 'newspaper') {
       newspaper.tune();
     } else if (state.mode === 'seamless') {
-      if (state.paged) paged.update();
+      if (state.variant !== 'vertical') paged.update();
       else seamless.update(itemsFromIndex(), change.dirty);
     } else if (state.mode === 'mirror') {
       mirror.update(itemsFromIndex(), { history: history ? history.snapshot() : null }, change);
@@ -373,8 +375,11 @@ DSHC.app = (() => {
         return;
       }
       if (state.mode === 'seamless') {
-        if (state.paged) paged.apply(target, state.resolved);
-        else seamless.relayout();
+        if (state.variant !== 'vertical') {
+          paged.apply(target, state.resolved, { progress: state.variant === 'horizontal' ? 'linear' : 'page' });
+        } else {
+          seamless.relayout();
+        }
       }
       else if (state.mode === 'mirror') mirror.position(rect);
       else if (state.mode === 'newspaper') newspaper.tune();
@@ -433,23 +438,25 @@ DSHC.app = (() => {
     render();
   }
 
-  function setPaged(value) {
-    state.paged = !!value;
+  function setVariant(value) {
+    const next = String(value);
+    if (VARIANTS.indexOf(next) < 0 || next === state.variant) return;
+    state.variant = next;
     writeSettings();
     if (state.mode === 'seamless') applyMode();
     else render();
   }
 
   function nextPage() {
-    if (state.mode === 'seamless' && state.paged && paged) paged.next();
+    if (state.mode === 'seamless' && state.variant !== 'vertical' && paged) paged.next();
   }
 
   function prevPage() {
-    if (state.mode === 'seamless' && state.paged && paged) paged.prev();
+    if (state.mode === 'seamless' && state.variant !== 'vertical' && paged) paged.prev();
   }
 
   function setPage(value) {
-    if (state.mode === 'seamless' && state.paged && paged) paged.goTo(Number(value) || 0);
+    if (state.mode === 'seamless' && state.variant !== 'vertical' && paged) paged.goTo(Number(value) || 0);
   }
 
   function loadEarlier() {
@@ -489,7 +496,7 @@ DSHC.app = (() => {
     state.mode = settings.mode;
     state.cols = settings.cols;
     state.autoLoad = settings.autoLoad;
-    state.paged = settings.paged;
+    state.variant = settings.variant;
 
     injectStyles();
 
@@ -519,7 +526,7 @@ DSHC.app = (() => {
       onMode: setMode,
       onColumns: setColumns,
       onAutoLoad: setAutoLoad,
-      onPaged: setPaged,
+      onVariant: setVariant,
       onLoadEarlier: loadEarlier,
       onRetry: () => {
         if (history) history.retry();
@@ -679,7 +686,7 @@ DSHC.app = (() => {
     setMode,
     setColumns,
     setAutoLoad,
-    setPaged,
+    setVariant,
     nextPage,
     prevPage,
     setPage,
@@ -722,7 +729,7 @@ DSHC.app = (() => {
       setMode,
       setColumns,
       setAutoLoad,
-      setPaged,
+      setVariant,
       nextPage,
       prevPage,
       setPage,

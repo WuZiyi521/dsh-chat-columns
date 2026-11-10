@@ -58,6 +58,8 @@ class El {
     this.rect = null;
     this.scrollTop = 0;
     this.scrollHeight = 0;
+    this.scrollLeft = 0;
+    this.scrollWidth = 0;
     this._clientWidth = 0;
     this._clientHeight = 0;
     this._offsetHeight = 0;
@@ -408,7 +410,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.4.0');
+  assert.equal(data.diag.version, '3.5.0');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -524,6 +526,8 @@ run(`
     const composer = el('div', { 'data-composer-seat': '' });
     composer.rect = { top: 760, left: 0, right: 1200, bottom: 900, width: 1200, height: 140 };
     scroller.append(composer);
+
+    wrap.scrollWidth = 3396;
 
     content.append(scroller);
     document.body.append(content);
@@ -646,58 +650,60 @@ step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
   );
 });
 
-step('无缝（实验·翻页式）：一屏 N 列 + 整页平移', () => {
-  run('window.__dshc.setPaged(true);');
-  const first = read(`(() => {
+step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', () => {
+  run('window.__dshc.setVariant("paged");');
+  const paged = read(`(() => {
     const diag = window.__dshc.diagnose().paged;
     const c = __fixture.column;
     return {
       active: diag.active,
+      progress: diag.progress,
       cols: diag.cols,
+      totalCols: diag.totalCols,
       pages: diag.pages,
       page: diag.page,
       count: c.style.getPropertyValue('column-count'),
       fill: c.style.getPropertyValue('column-fill'),
-      height: c.style.getPropertyValue('height'),
       width: c.style.getPropertyValue('width'),
-      hostOverflow: __fixture.wrap.style.getPropertyValue('overflow'),
+      height: c.style.getPropertyValue('height'),
+      hostOverflowX: __fixture.wrap.style.getPropertyValue('overflow-x'),
       scrollerOverflow: __fixture.scroller.style.getPropertyValue('overflow'),
-      pagedMark: c.hasAttribute('data-dshc-paged')
+      mark: c.hasAttribute('data-dshc-paged')
     };
   })()`);
-  assert.equal(first.active, true);
-  assert.equal(first.pagedMark, true);
-  assert.equal(first.cols, 2);
-  assert.equal(first.count, '2');
-  assert.equal(first.fill, 'auto', '翻页模型用 auto 填满每一列');
-  assert.equal(first.height, '660px');
-  assert.equal(first.width, '1092px', '2×526 + 40');
-  assert.equal(first.hostOverflow, 'hidden', '外层裁剪纸带');
-  assert.equal(first.scrollerOverflow, 'hidden', '翻页接管后宿主不再自己滚');
-  assert.equal(first.page, 0);
-  assert.equal(first.pages, 3);
+  assert.equal(paged.active, true);
+  assert.equal(paged.mark, true);
+  assert.equal(paged.progress, 'page');
+  assert.equal(paged.cols, 2);
+  assert.equal(paged.totalCols, 6, '内容 3800 高 / 视口 660 → 6 列');
+  assert.equal(paged.pages, 3, '一屏 2 列 → 3 页');
+  assert.equal(paged.count, '6');
+  assert.equal(paged.fill, 'auto');
+  assert.equal(paged.width, '3356px', '6×526 + 5×40');
+  assert.equal(paged.height, '660px');
+  assert.equal(paged.hostOverflowX, 'auto', '纸带由宿主横向滚动');
+  assert.equal(paged.scrollerOverflow, 'hidden');
 
   run('window.__dshc.nextPage();');
-  const second = read(`(() => ({
-    page: window.__dshc.diagnose().paged.page,
-    transform: __fixture.column.style.getPropertyValue('transform')
-  }))()`);
-  assert.equal(second.page, 1);
-  assert.equal(second.transform, 'translate3d(-1132px,0,0)', '整条左移一页 = 2 列 + 间距');
+  const turned = read(`({ page: window.__dshc.diagnose().paged.page, left: __fixture.wrap.scrollLeft })`);
+  assert.equal(turned.page, 1);
+  assert.equal(turned.left, 1132, '一页 = 2 列 = 1132px');
 
-  run('window.__dshc.setPaged(false);');
-  const third = read(`(() => ({
-    mark: __fixture.column.hasAttribute('data-dshc-paged'),
-    width: __fixture.column.style.getPropertyValue('width'),
+  run('window.__dshc.setVariant("horizontal");');
+  const linear = read(`({ progress: window.__dshc.diagnose().paged.progress, active: window.__dshc.diagnose().paged.active })`);
+  assert.equal(linear.active, true);
+  assert.equal(linear.progress, 'linear', '横向模式滚轮是线性移动');
+
+  run('window.__dshc.setVariant("vertical");');
+  const back = read(`({
+    active: window.__dshc.diagnose().paged.active,
+    pagedMark: __fixture.column.hasAttribute('data-dshc-paged'),
     hostOverflow: __fixture.wrap.style.getPropertyValue('overflow'),
-    scrollerOverflow: __fixture.scroller.style.getPropertyValue('overflow'),
-    active: window.__dshc.diagnose().paged.active
-  }))()`);
-  assert.equal(third.mark, false, '关掉开关要还原住宿主列');
-  assert.notEqual(third.width, '1092px', '纸带宽度要还回去（此时回到普通无缝）');
-  assert.equal(third.hostOverflow, '');
-  assert.equal(third.scrollerOverflow, '');
-  assert.equal(third.active, false);
+    left: __fixture.wrap.scrollLeft
+  })`);
+  assert.equal(back.active, false);
+  assert.equal(back.pagedMark, false);
+  assert.equal(back.hostOverflow, '');
 });
 
 step('复制模式：只读副本 + 分栏 + 隐藏宿主正文', () => {

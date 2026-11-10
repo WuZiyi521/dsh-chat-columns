@@ -79,7 +79,6 @@ DSHC.controller = (() => {
     const onMode = options.onMode || function noop() {};
     const onColumns = options.onColumns || function noop() {};
     const onAutoLoad = options.onAutoLoad || function noop() {};
-    const onBlockUnit = options.onBlockUnit || function noop() {};
     const onLoadEarlier = options.onLoadEarlier || function noop() {};
     const onRetry = options.onRetry || function noop() {};
 
@@ -142,15 +141,6 @@ DSHC.controller = (() => {
     });
     colsGroup.append(colsLabel, colsBox);
 
-    const blockGroup = el('div', 'dshc-group', { 'data-role': 'block-group' });
-    const blockLabel = el('label', 'dshc-switch');
-    const blockInput = el('input', null, { type: 'checkbox', 'data-role': 'block' });
-    const blockUi = el('span', 'dshc-switch-ui', { 'aria-hidden': 'true' });
-    const blockText = el('span', 'dshc-switch-text');
-    blockText.textContent = '按段落拆分（实验：单元更小、接缝更顺）';
-    blockLabel.append(blockInput, blockUi, blockText);
-    blockGroup.appendChild(blockLabel);
-
     const autoGroup = el('div', 'dshc-group', { 'data-role': 'auto-group' });
     const autoLabel = el('label', 'dshc-switch');
     const autoInput = el('input', null, { type: 'checkbox', 'data-role': 'auto' });
@@ -172,7 +162,7 @@ DSHC.controller = (() => {
     const note = el('div', 'dshc-note', { 'data-role': 'note' });
     note.hidden = true;
 
-    panel.append(head, modesGroup, colsGroup, autoGroup, blockGroup, status, actions, note);
+    panel.append(head, modesGroup, colsGroup, autoGroup, status, actions, note);
     wrap.append(toggle, panel);
 
     // 顶部手动「加载更早」悬浮胶囊：报纸默认手动、无缝关闭自动加载时的唯一入口。
@@ -297,8 +287,6 @@ DSHC.controller = (() => {
       }
 
       autoGroup.hidden = mode === 'native';
-      blockGroup.hidden = mode !== 'seamless';
-      blockInput.checked = !!current.blockUnit;
       autoInput.checked = !!current.autoLoad;
       autoText.textContent = '到顶自动加载更早（' + modeLabel(mode) + '）';
 
@@ -353,7 +341,6 @@ DSHC.controller = (() => {
     }
 
     autoInput.addEventListener('change', () => onAutoLoad(autoInput.checked));
-    blockInput.addEventListener('change', () => onBlockUnit(blockInput.checked));
     earlierBtn.addEventListener('click', () => onLoadEarlier());
     retryBtn.addEventListener('click', () => onRetry());
     pill.addEventListener('click', () => onLoadEarlier());

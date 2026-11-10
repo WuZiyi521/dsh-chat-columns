@@ -9,7 +9,7 @@
 DSHC.app = (() => {
   'use strict';
 
-  const VERSION = '3.3.0';
+  const VERSION = '3.2.1';
   const SETTINGS_KEY = 'dshc-settings';
   const MODES = ['native', 'newspaper', 'seamless', 'mirror'];
   const COLS = ['auto', '1', '2', '3'];
@@ -20,7 +20,6 @@ DSHC.app = (() => {
     mode: 'native',
     cols: 'auto',
     autoLoad: Object.assign({}, DEFAULT_AUTO),
-    blockUnit: false,
     resolved: 1
   };
 
@@ -64,7 +63,6 @@ DSHC.app = (() => {
     return {
       mode: MODES.indexOf(value.mode) >= 0 ? value.mode : 'native',
       cols: COLS.indexOf(String(value.cols)) >= 0 ? String(value.cols) : 'auto',
-      blockUnit: !!value.blockUnit,
       autoLoad: {
         newspaper: auto.newspaper === undefined ? DEFAULT_AUTO.newspaper : !!auto.newspaper,
         seamless: auto.seamless === undefined ? DEFAULT_AUTO.seamless : !!auto.seamless,
@@ -81,7 +79,6 @@ DSHC.app = (() => {
           v: 1,
           mode: state.mode,
           cols: state.cols,
-          blockUnit: state.blockUnit,
           autoLoadHistory: state.autoLoad
         })
       );
@@ -123,7 +120,6 @@ DSHC.app = (() => {
       columns: state.cols,
       resolved: state.resolved,
       autoLoad: autoFor(state.mode),
-      blockUnit: !!state.blockUnit,
       mobile: isMobile(),
       enhanced: !!(target.scroller && target.column) && target.reason !== 'ambiguous',
       reason: target.reason,
@@ -242,9 +238,7 @@ DSHC.app = (() => {
         note = '当前宽度只够 1 列';
       } else {
         hideHostOlder(true);
-        if (!seamless.apply(target, state.resolved, items, { blockUnit: state.blockUnit })) {
-          note = '无缝模式初始化失败，已退回原生';
-        }
+        if (!seamless.apply(target, state.resolved, items)) note = '无缝模式初始化失败，已退回原生';
       }
     } else if (state.mode === 'mirror') {
       hideHostOlder(true);
@@ -425,13 +419,6 @@ DSHC.app = (() => {
     render();
   }
 
-  function setBlockUnit(value) {
-    state.blockUnit = !!value;
-    writeSettings();
-    if (state.mode === 'seamless') applyMode();
-    else render();
-  }
-
   function loadEarlier() {
     if (history) history.request('manual');
   }
@@ -469,7 +456,6 @@ DSHC.app = (() => {
     state.mode = settings.mode;
     state.cols = settings.cols;
     state.autoLoad = settings.autoLoad;
-    state.blockUnit = settings.blockUnit;
 
     injectStyles();
 
@@ -498,7 +484,6 @@ DSHC.app = (() => {
       onMode: setMode,
       onColumns: setColumns,
       onAutoLoad: setAutoLoad,
-      onBlockUnit: setBlockUnit,
       onLoadEarlier: loadEarlier,
       onRetry: () => {
         if (history) history.retry();
@@ -655,7 +640,6 @@ DSHC.app = (() => {
     setMode,
     setColumns,
     setAutoLoad,
-    setBlockUnit,
     loadEarlier,
     refresh: () => resolve(true)
   };
@@ -695,7 +679,6 @@ DSHC.app = (() => {
       setMode,
       setColumns,
       setAutoLoad,
-      setBlockUnit,
       loadEarlier,
       refresh: () => resolve(true),
       unmount: () => api.unmount()

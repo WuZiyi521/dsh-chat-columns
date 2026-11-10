@@ -273,14 +273,6 @@ const DEFAULTS = {
   paddingTop: '0px',
   paddingBottom: '0px',
   marginTop: '0px',
-  marginLeft: '0px',
-  marginRight: '0px',
-  borderTopWidth: '0px',
-  borderBottomWidth: '0px',
-  borderLeftWidth: '0px',
-  borderRightWidth: '0px',
-  backgroundImage: 'none',
-  boxShadow: 'none',
   color: 'rgb(0, 0, 0)'
 };
 
@@ -416,7 +408,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.3.0');
+  assert.equal(data.diag.version, '3.2.1');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -512,21 +504,6 @@ run(`
     rows.push(tall);
     slot.append(tall);
 
-    // 一条带正文容器的消息：外侧 wrapper 无盒子，里面 3 个段落（模拟 Markdown 正文）
-    const body = el('div', { 'data-test-body': '' });
-    body.computed = { backgroundColor: 'transparent' };
-    const paragraphs = [];
-    for (let i = 0; i < 3; i += 1) {
-      const paragraph = document.createElement('p');
-      paragraph.textContent = '段落 ' + (i + 1);
-      paragraphs.push(paragraph);
-      body.append(paragraph);
-    }
-    const wrapper = el('div', { 'data-test-wrapper': '' });
-    wrapper.computed = { backgroundColor: 'transparent' };
-    wrapper.append(body);
-    rows[1].append(wrapper);
-
     // 宿主那种「宽表撑出正文列」的结构：外层带左 padding，表格靠它出列
     const wide = el('div', { 'data-test-wide': '' });
     wide.computed = { paddingLeft: '120px' };
@@ -550,7 +527,7 @@ run(`
 
     content.append(scroller);
     document.body.append(content);
-    globalThis.__fixture = { content, scroller, wrap, column, slot, rows, body, paragraphs, wrapper, olderWrap, olderBtn, composer };
+    globalThis.__fixture = { content, scroller, wrap, column, slot, rows, olderWrap, olderBtn, composer };
   })();
 `);
 
@@ -614,8 +591,6 @@ step('报纸模式：所有内容可跨列，代码块的滚动容器被放开',
       preWrap: pre.style.getPropertyValue('white-space'),
       widePad: __fixture.rows[0].querySelector('div').style.getPropertyValue('padding-left'),
       tableLayout: __fixture.rows[0].querySelector('table').style.getPropertyValue('table-layout'),
-      bodyDisplay: __fixture.body.style.getPropertyValue('display'),
-      rowDisplay: __fixture.rows[1].style.getPropertyValue('display'),
       tableWidth: __fixture.rows[0].querySelector('table').style.getPropertyValue('width')
     };
   })()`);
@@ -671,29 +646,6 @@ step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
   );
 });
 
-step('无缝（实验）：按段落拆分后单元变小、接缝更顺', () => {
-  run('window.__dshc.setBlockUnit(true);');
-  const data = read(`(() => {
-    const diag = window.__dshc.diagnose().seamless;
-    return {
-      blockUnit: diag.blockUnit,
-      active: diag.active,
-      units: diag.items,
-      bodyDisplay: __fixture.body.style.getPropertyValue('display'),
-      wrapperDisplay: __fixture.wrapper.style.getPropertyValue('display'),
-      rowDisplay: __fixture.rows[1].style.getPropertyValue('display'),
-      paragraphPositions: __fixture.paragraphs.map((p) => p.style.getPropertyValue('position'))
-    };
-  })()`);
-  assert.equal(data.blockUnit, true);
-  assert.equal(data.active, true);
-  assert.equal(data.units, 9, '7 条消息 → 其中一条拆成 3 段 = 9 个单元');
-  assert.equal(data.rowDisplay, 'contents', '消息行要摊平');
-  assert.equal(data.wrapperDisplay, 'contents');
-  assert.equal(data.bodyDisplay, 'contents', '正文容器要摊平，段落才直接参与列排版');
-  assert.ok(data.paragraphPositions.every((value) => value === 'absolute'), '每个段落各自定位');
-});
-
 step('复制模式：只读副本 + 分栏 + 隐藏宿主正文', () => {
   run('window.__dshc.setMode("mirror");');
   const data = read(`(() => {
@@ -740,8 +692,6 @@ step('切回原生：宿主全部还原', () => {
       preOverflow: __fixture.rows[6].querySelector('pre').style.getPropertyValue('overflow'),
       preWrap: __fixture.rows[6].querySelector('pre').style.getPropertyValue('white-space'),
       tableLayout: __fixture.rows[0].querySelector('table').style.getPropertyValue('table-layout'),
-      bodyDisplay: __fixture.body.style.getPropertyValue('display'),
-      rowDisplay: __fixture.rows[1].style.getPropertyValue('display'),
       mode: window.__dshc.getState().mode
     };
   })()`);
@@ -753,8 +703,6 @@ step('切回原生：宿主全部还原', () => {
   assert.equal(data.preOverflow, '', '代码块上的 overflow 放开也要还原');
   assert.equal(data.preWrap, '', '代码块上的软换行也要还原');
   assert.equal(data.tableLayout, '', '表格的定宽布局也要还原');
-  assert.equal(data.bodyDisplay, '', '被摊平的正文容器要还原');
-  assert.equal(data.rowDisplay, '', '被摊平的消息行要还原');
   assert.equal(data.mode, 'native');
 });
 

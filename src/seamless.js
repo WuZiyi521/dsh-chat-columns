@@ -265,29 +265,18 @@ DSHC.seamless = (() => {
         adapter.setStyle(el, 'margin', '0');
       }
 
-      // 链上每一层「不在链上的孩子」都是单元，按文档顺序收集。
-      // 注意：宿主会用 display:contents 的插槽壳包住真正的块，壳本身没有盒子
-      // （高度 0），必须下钻到有盒子里层，否则所有单元都会堆在同一个 y 上重叠。
+      // 链上每一层「不在链上的孩子」都是单元，按文档顺序收集
       const onChain = new Set(chain);
       const units = [];
       const collect = (parent) => {
         for (const child of Array.from(parent.children)) {
-          if (onChain.has(child)) {
-            collect(child);
-            continue;
-          }
-          if (getComputedStyle(child).display === 'contents') {
-            collect(child);
-            continue;
-          }
-          units.push(child);
+          if (onChain.has(child)) collect(child);
+          else units.push(child);
         }
       };
       collect(itemEl);
 
       if (!units.length) return null;
-      // 全部量不出高度说明这套结构不适合按块拆，回退成整条消息
-      if (!units.some((el) => el.getBoundingClientRect().height > 1)) return null;
       const entry = { units, chain };
       expanded.set(itemEl, entry);
       return entry;
@@ -685,11 +674,6 @@ DSHC.seamless = (() => {
         maxScroll: maxScroll(),
         items: records.length,
         blockUnit: blockMode,
-        // 前几个单元的高度/标签：按块拆分出问题时，一眼能看出是不是量到了 0 高的壳
-        unitsSample: records.slice(0, 6).map((rec) => ({
-          tag: rec.el && rec.el.tagName ? rec.el.tagName.toLowerCase() : '?',
-          h: Math.round(rec.height)
-        })),
         tall: records.filter((rec) => rec.tall).length,
         hidden: document.querySelectorAll('[' + MARK.hide + '="b"]').length
       };

@@ -416,7 +416,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.3.2');
+  assert.equal(data.diag.version, '3.3.1');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -519,17 +519,9 @@ run(`
     for (let i = 0; i < 3; i += 1) {
       const paragraph = document.createElement('p');
       paragraph.textContent = '段落 ' + (i + 1);
-      paragraph.rect = { top: 200 + i * 60, left: 32, right: 800, bottom: 240 + i * 60, width: 768, height: 40 };
       paragraphs.push(paragraph);
       body.append(paragraph);
     }
-    // 宿主会用 display:contents 的插槽壳包住真正的块：壳必须被穿透，不能被当成单元
-    const shell = el('div', { 'data-test-shell': '' });
-    shell.computed = { display: 'contents' };
-    body.removeChild(paragraphs[0]);
-    shell.append(paragraphs[0]);
-    body.append(shell);
-
     const wrapper = el('div', { 'data-test-wrapper': '' });
     wrapper.computed = { backgroundColor: 'transparent' };
     wrapper.append(body);
@@ -563,7 +555,7 @@ run(`
 
     content.append(scroller);
     document.body.append(content);
-    globalThis.__fixture = { content, scroller, wrap, column, slot, rows, body, paragraphs, wrapper, shell, actions, olderWrap, olderBtn, composer };
+    globalThis.__fixture = { content, scroller, wrap, column, slot, rows, body, paragraphs, wrapper, actions, olderWrap, olderBtn, composer };
   })();
 `);
 
@@ -696,7 +688,6 @@ step('无缝（实验）：按段落拆分，同级节点不能留在流里', ()
       wrapperDisplay: __fixture.wrapper.style.getPropertyValue('display'),
       rowDisplay: __fixture.rows[1].style.getPropertyValue('display'),
       actionsPosition: __fixture.actions.style.getPropertyValue('position'),
-      shellPosition: __fixture.shell.style.getPropertyValue('position'),
       paragraphPositions: __fixture.paragraphs.map((p) => p.style.getPropertyValue('position'))
     };
   })()`);
@@ -707,7 +698,6 @@ step('无缝（实验）：按段落拆分，同级节点不能留在流里', ()
   assert.equal(data.wrapperDisplay, 'contents');
   assert.equal(data.bodyDisplay, 'contents', '正文容器要摊平');
   assert.equal(data.actionsPosition, 'absolute', '同级操作栏必须变成单元，不能留在文档流里');
-  assert.equal(data.shellPosition, '', 'display:contents 的插槽壳不能被当成单元，要穿透到里层');
   assert.ok(data.paragraphPositions.every((value) => value === 'absolute'), '每个段落各自定位');
 });
 

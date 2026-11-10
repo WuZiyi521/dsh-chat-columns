@@ -408,7 +408,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.2.1');
+  assert.equal(data.diag.version, '3.2.2');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 

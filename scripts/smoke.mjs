@@ -408,7 +408,7 @@ step('getState / diagnose 可用', () => {
   const data = read('({ state: window.__dshc.getState(), diag: window.__dshc.diagnose() })');
   assert.equal(data.state.caps.scroller, false);
   assert.equal(data.state.caps.column, false);
-  assert.equal(data.diag.version, '3.2.2');
+  assert.equal(data.diag.version, '3.4.0');
   assert.equal(data.diag.target.reason, 'no-conversation');
 });
 
@@ -644,6 +644,60 @@ step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
     data.transforms.every((value) => value.indexOf('translate3d') === 0),
     '每条消息都应有 translate3d'
   );
+});
+
+step('无缝（实验·翻页式）：一屏 N 列 + 整页平移', () => {
+  run('window.__dshc.setPaged(true);');
+  const first = read(`(() => {
+    const diag = window.__dshc.diagnose().paged;
+    const c = __fixture.column;
+    return {
+      active: diag.active,
+      cols: diag.cols,
+      pages: diag.pages,
+      page: diag.page,
+      count: c.style.getPropertyValue('column-count'),
+      fill: c.style.getPropertyValue('column-fill'),
+      height: c.style.getPropertyValue('height'),
+      width: c.style.getPropertyValue('width'),
+      hostOverflow: __fixture.wrap.style.getPropertyValue('overflow'),
+      scrollerOverflow: __fixture.scroller.style.getPropertyValue('overflow'),
+      pagedMark: c.hasAttribute('data-dshc-paged')
+    };
+  })()`);
+  assert.equal(first.active, true);
+  assert.equal(first.pagedMark, true);
+  assert.equal(first.cols, 2);
+  assert.equal(first.count, '2');
+  assert.equal(first.fill, 'auto', '翻页模型用 auto 填满每一列');
+  assert.equal(first.height, '660px');
+  assert.equal(first.width, '1092px', '2×526 + 40');
+  assert.equal(first.hostOverflow, 'hidden', '外层裁剪纸带');
+  assert.equal(first.scrollerOverflow, 'hidden', '翻页接管后宿主不再自己滚');
+  assert.equal(first.page, 0);
+  assert.equal(first.pages, 3);
+
+  run('window.__dshc.nextPage();');
+  const second = read(`(() => ({
+    page: window.__dshc.diagnose().paged.page,
+    transform: __fixture.column.style.getPropertyValue('transform')
+  }))()`);
+  assert.equal(second.page, 1);
+  assert.equal(second.transform, 'translate3d(-1132px,0,0)', '整条左移一页 = 2 列 + 间距');
+
+  run('window.__dshc.setPaged(false);');
+  const third = read(`(() => ({
+    mark: __fixture.column.hasAttribute('data-dshc-paged'),
+    width: __fixture.column.style.getPropertyValue('width'),
+    hostOverflow: __fixture.wrap.style.getPropertyValue('overflow'),
+    scrollerOverflow: __fixture.scroller.style.getPropertyValue('overflow'),
+    active: window.__dshc.diagnose().paged.active
+  }))()`);
+  assert.equal(third.mark, false, '关掉开关要还原住宿主列');
+  assert.notEqual(third.width, '1092px', '纸带宽度要还回去（此时回到普通无缝）');
+  assert.equal(third.hostOverflow, '');
+  assert.equal(third.scrollerOverflow, '');
+  assert.equal(third.active, false);
 });
 
 step('复制模式：只读副本 + 分栏 + 隐藏宿主正文', () => {

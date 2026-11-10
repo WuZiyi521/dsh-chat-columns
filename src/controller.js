@@ -79,6 +79,7 @@ DSHC.controller = (() => {
     const onMode = options.onMode || function noop() {};
     const onColumns = options.onColumns || function noop() {};
     const onAutoLoad = options.onAutoLoad || function noop() {};
+    const onPaged = options.onPaged || function noop() {};
     const onLoadEarlier = options.onLoadEarlier || function noop() {};
     const onRetry = options.onRetry || function noop() {};
 
@@ -141,6 +142,15 @@ DSHC.controller = (() => {
     });
     colsGroup.append(colsLabel, colsBox);
 
+    const pagedGroup = el('div', 'dshc-group', { 'data-role': 'paged-group' });
+    const pagedLabel = el('label', 'dshc-switch');
+    const pagedInput = el('input', null, { type: 'checkbox', 'data-role': 'paged' });
+    const pagedUi = el('span', 'dshc-switch-ui', { 'aria-hidden': 'true' });
+    const pagedText = el('span', 'dshc-switch-text');
+    pagedText.textContent = '翻页式（实验：一屏 N 列，滚动翻页）';
+    pagedLabel.append(pagedInput, pagedUi, pagedText);
+    pagedGroup.appendChild(pagedLabel);
+
     const autoGroup = el('div', 'dshc-group', { 'data-role': 'auto-group' });
     const autoLabel = el('label', 'dshc-switch');
     const autoInput = el('input', null, { type: 'checkbox', 'data-role': 'auto' });
@@ -162,7 +172,7 @@ DSHC.controller = (() => {
     const note = el('div', 'dshc-note', { 'data-role': 'note' });
     note.hidden = true;
 
-    panel.append(head, modesGroup, colsGroup, autoGroup, status, actions, note);
+    panel.append(head, modesGroup, colsGroup, autoGroup, pagedGroup, status, actions, note);
     wrap.append(toggle, panel);
 
     // 顶部手动「加载更早」悬浮胶囊：报纸默认手动、无缝关闭自动加载时的唯一入口。
@@ -235,6 +245,10 @@ DSHC.controller = (() => {
       if (current.mode === 'native') {
         return '原生单列' + (h.count > 0 ? ' · ' + h.count + ' 条消息' : '');
       }
+      const page = current.pageInfo;
+      if (page && page.active) {
+        return '无缝（翻页） ' + page.cols + ' 列 · 第 ' + (page.page + 1) + '/' + page.pages + ' 页';
+      }
       return modeLabel(current.mode) + ' ' + current.resolved + ' 列 · ' + historyText;
     }
 
@@ -287,6 +301,8 @@ DSHC.controller = (() => {
       }
 
       autoGroup.hidden = mode === 'native';
+      pagedGroup.hidden = mode !== 'seamless';
+      pagedInput.checked = !!current.paged;
       autoInput.checked = !!current.autoLoad;
       autoText.textContent = '到顶自动加载更早（' + modeLabel(mode) + '）';
 
@@ -341,6 +357,7 @@ DSHC.controller = (() => {
     }
 
     autoInput.addEventListener('change', () => onAutoLoad(autoInput.checked));
+    pagedInput.addEventListener('change', () => onPaged(pagedInput.checked));
     earlierBtn.addEventListener('click', () => onLoadEarlier());
     retryBtn.addEventListener('click', () => onRetry());
     pill.addEventListener('click', () => onLoadEarlier());

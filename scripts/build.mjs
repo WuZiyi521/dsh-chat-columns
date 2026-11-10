@@ -21,6 +21,7 @@ const MODULES = [
   'history.js',
   'newspaper.js',
   'seamless.js',
+  'paged.js',
   'mirror.js',
   'controller.js',
   'index.js'

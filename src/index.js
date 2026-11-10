@@ -9,7 +9,7 @@
 DSHC.app = (() => {
   'use strict';
 
-  const VERSION = '3.2.2';
+  const VERSION = '3.4.0';
   const SETTINGS_KEY = 'dshc-settings';
   const MODES = ['native', 'newspaper', 'seamless', 'mirror'];
   const COLS = ['auto', '1', '2', '3'];
@@ -20,6 +20,7 @@ DSHC.app = (() => {
     mode: 'native',
     cols: 'auto',
     autoLoad: Object.assign({}, DEFAULT_AUTO),
+    paged: false,
     resolved: 1
   };
 
@@ -38,6 +39,7 @@ DSHC.app = (() => {
   let indexer = null;
   let newspaper = null;
   let seamless = null;
+  let paged = null;
   let mirror = null;
 
   let themeWatch = null;
@@ -63,6 +65,7 @@ DSHC.app = (() => {
     return {
       mode: MODES.indexOf(value.mode) >= 0 ? value.mode : 'native',
       cols: COLS.indexOf(String(value.cols)) >= 0 ? String(value.cols) : 'auto',
+      paged: !!value.paged,
       autoLoad: {
         newspaper: auto.newspaper === undefined ? DEFAULT_AUTO.newspaper : !!auto.newspaper,
         seamless: auto.seamless === undefined ? DEFAULT_AUTO.seamless : !!auto.seamless,
@@ -79,6 +82,7 @@ DSHC.app = (() => {
           v: 1,
           mode: state.mode,
           cols: state.cols,
+          paged: state.paged,
           autoLoadHistory: state.autoLoad
         })
       );
@@ -120,6 +124,8 @@ DSHC.app = (() => {
       columns: state.cols,
       resolved: state.resolved,
       autoLoad: autoFor(state.mode),
+      paged: !!state.paged,
+      pageInfo: state.mode === 'seamless' && state.paged && paged ? paged.diagnose() : null,
       mobile: isMobile(),
       enhanced: !!(target.scroller && target.column) && target.reason !== 'ambiguous',
       reason: target.reason,
@@ -164,6 +170,7 @@ DSHC.app = (() => {
   function resetHost() {
     if (newspaper) newspaper.restore();
     if (seamless) seamless.restore();
+    if (paged) paged.restore();
     if (mirror) mirror.restore();
     if (target.column) {
       DSHC.adapter.resetEl(target.column);
@@ -238,7 +245,10 @@ DSHC.app = (() => {
         note = '当前宽度只够 1 列';
       } else {
         hideHostOlder(true);
-        if (!seamless.apply(target, state.resolved, items)) note = '无缝模式初始化失败，已退回原生';
+        const ok = state.paged
+          ? paged.apply(target, state.resolved)
+          : seamless.apply(target, state.resolved, items);
+        if (!ok) note = state.paged ? '翻页式无缝初始化失败，已退回原生' : '无缝模式初始化失败，已退回原生';
       }
     } else if (state.mode === 'mirror') {
       hideHostOlder(true);
@@ -268,7 +278,8 @@ DSHC.app = (() => {
     if (state.mode === 'newspaper') {
       newspaper.tune();
     } else if (state.mode === 'seamless') {
-      seamless.update(itemsFromIndex(), change.dirty);
+      if (state.paged) paged.update();
+      else seamless.update(itemsFromIndex(), change.dirty);
     } else if (state.mode === 'mirror') {
       mirror.update(itemsFromIndex(), { history: history ? history.snapshot() : null }, change);
     }
@@ -361,7 +372,10 @@ DSHC.app = (() => {
         applyMode();
         return;
       }
-      if (state.mode === 'seamless') seamless.relayout();
+      if (state.mode === 'seamless') {
+        if (state.paged) paged.apply(target, state.resolved);
+        else seamless.relayout();
+      }
       else if (state.mode === 'mirror') mirror.position(rect);
       else if (state.mode === 'newspaper') newspaper.tune();
       render();
@@ -419,6 +433,25 @@ DSHC.app = (() => {
     render();
   }
 
+  function setPaged(value) {
+    state.paged = !!value;
+    writeSettings();
+    if (state.mode === 'seamless') applyMode();
+    else render();
+  }
+
+  function nextPage() {
+    if (state.mode === 'seamless' && state.paged && paged) paged.next();
+  }
+
+  function prevPage() {
+    if (state.mode === 'seamless' && state.paged && paged) paged.prev();
+  }
+
+  function setPage(value) {
+    if (state.mode === 'seamless' && state.paged && paged) paged.goTo(Number(value) || 0);
+  }
+
   function loadEarlier() {
     if (history) history.request('manual');
   }
@@ -456,6 +489,7 @@ DSHC.app = (() => {
     state.mode = settings.mode;
     state.cols = settings.cols;
     state.autoLoad = settings.autoLoad;
+    state.paged = settings.paged;
 
     injectStyles();
 
@@ -470,6 +504,7 @@ DSHC.app = (() => {
 
     newspaper = DSHC.newspaper.create({});
     seamless = DSHC.seamless.create({});
+    paged = DSHC.paged.create({ onChange: () => render() });
     mirror = DSHC.mirror.create({
       onNeedMore: () => {
         if (history) history.request('auto');
@@ -484,6 +519,7 @@ DSHC.app = (() => {
       onMode: setMode,
       onColumns: setColumns,
       onAutoLoad: setAutoLoad,
+      onPaged: setPaged,
       onLoadEarlier: loadEarlier,
       onRetry: () => {
         if (history) history.retry();
@@ -553,11 +589,13 @@ DSHC.app = (() => {
       resetHost();
       if (newspaper) newspaper.destroy();
       if (seamless) seamless.restore();
+      if (paged) paged.restore();
       if (mirror) mirror.restore();
       DSHC.adapter.resetAll();
     }
     newspaper = null;
     seamless = null;
+    paged = null;
     mirror = null;
 
     if (indexer) indexer.destroy();
@@ -612,6 +650,7 @@ DSHC.app = (() => {
       available: Math.round(availableWidth()),
       newspaper: newspaper ? newspaper.diagnose() : null,
       seamless: seamless ? seamless.diagnose() : null,
+      paged: paged ? paged.diagnose() : null,
       mirror: mirror ? { active: mirror.isActive() } : null,
       history: history ? history.snapshot() : null
     };
@@ -640,6 +679,10 @@ DSHC.app = (() => {
     setMode,
     setColumns,
     setAutoLoad,
+    setPaged,
+    nextPage,
+    prevPage,
+    setPage,
     loadEarlier,
     refresh: () => resolve(true)
   };
@@ -679,6 +722,10 @@ DSHC.app = (() => {
       setMode,
       setColumns,
       setAutoLoad,
+      setPaged,
+      nextPage,
+      prevPage,
+      setPage,
       loadEarlier,
       refresh: () => resolve(true),
       unmount: () => api.unmount()

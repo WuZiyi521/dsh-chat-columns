@@ -260,7 +260,8 @@ DSHC.app = (() => {
     }
 
     if (state.mode === 'newspaper') {
-      if (change.structural) newspaper.tune();
+      // 结构变化立刻重排；流式增长稍等一会儿，别每批 token 都强制同步布局
+      newspaper.tune(change.structural ? 0 : 600);
     } else if (state.mode === 'seamless') {
       seamless.update(itemsFromIndex(), change.dirty);
     } else if (state.mode === 'mirror') {
@@ -604,7 +605,7 @@ DSHC.app = (() => {
           }
         : null,
       available: Math.round(availableWidth()),
-      newspaper: newspaper ? { applied: newspaper.isApplied(), columns: newspaper.columns } : null,
+      newspaper: newspaper ? newspaper.diagnose() : null,
       seamless: seamless ? seamless.diagnose() : null,
       mirror: mirror ? { active: mirror.isActive() } : null,
       history: history ? history.snapshot() : null

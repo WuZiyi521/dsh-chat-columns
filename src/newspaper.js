@@ -1,26 +1,44 @@
 /**
  * A｜报纸模式：在宿主原生正文列上做 CSS 均衡分栏。
  *
- * 规则（3.0 任务书）：
+ * 规则：
  *  - 宿主的列是 display:flex，CSS 多列对 flex 容器无效，先改回 display:block；
  *  - column-fill:balance，列高由内容与列数共同决定；
  *  - 释放 --dsh-chat-content-width 的宽度限制，退出时原样还回去；
- *  - 短消息 break-inside:avoid，超长消息允许跨列（否则最后一列会出现整屏空白）；
+ *  - 短消息 break-inside:avoid，超长消息允许跨列；
  *  - 不接管 scrollTop，滚动/锚点/历史加载都还是宿主自己的。
+ *
+ * 关于「底部留白」（本文件的核心逻辑）：
+ *  均衡分栏的列高 = max(各列内容高)，而 break-inside:avoid 把每条消息变成不可拆的整块，
+ *  于是一条比列还高的消息会把**所有**列一起顶到它那么高，其它列下面就是大片空白。
+ *  所以这里按「理想列高 ideal = 内容总高 / 列数」来判定：
+ *    - 消息高于 ideal 的一半 → 允许跨列（切在列缝上，读的时候接着看下一列顶部）；
+ *    - 消息高于 ideal 的 2.2 倍 → 浏览器也切不开（典型是自带滚动的代码块），
+ *      直接给它一个「一屏多一点」的高度上限并让消息自己滚，禁止它把整页顶开。
+ *  判据用的是 ideal 而不是「当前列高」，因为后者会被上一条无法拆分的消息撑大，形成自激。
  */
 DSHC.newspaper = (() => {
   'use strict';
 
   const RAIL = 44; // 右侧 TurnNavigator 轨道 + 安全距
-  const LONG_RATIO = 0.55; // 超过列高 55% 的消息视为「超长」，允许跨列
+  /** 超过「理想列高」的这个比例 → 允许跨列 */
+  const SPLIT_RATIO = 0.5;
+  /** 但太矮的消息不切：切了反而难读 */
+  const SPLIT_MIN = 320;
+  /** 列高超过理想列高的这个倍数 → 说明有切不开的巨型块在顶 */
+  const CAP_SLACK = 1.25;
+  /** 巨型块的高度上限 = 理想列高 × 这个倍数（略小于一列，内容由它自己滚） */
+  const CAP_TARGET = 0.95;
 
-  function create(context) {
+  function create() {
     const adapter = DSHC.adapter;
     const math = DSHC.math;
     let applied = false;
     let column = null;
     let columns = 1;
     let tuneRaf = 0;
+    let tuneTimer = 0;
+    let tuneCapped = 0;
 
     function markedItems() {
       return column ? Array.from(column.querySelectorAll('[' + adapter.MARK.item + ']')) : [];
@@ -64,34 +82,113 @@ DSHC.newspaper = (() => {
     }
 
     /**
-     * 超长消息允许跨列：均衡分栏下，一条比列还高的消息若不许拆开，
-     * 浏览器只能把列高抬到它那么高，其它列就会大面积空白。
+     * 按「理想列高」重排可跨列/需限高的消息，把底部留白压到最小。
+     * 幂等：每次先量自然高度（撤掉上一次加的上限），再重新判定。
      */
     function tune() {
       tuneRaf = 0;
       if (!applied || !column || !column.isConnected) return;
-      const height = column.getBoundingClientRect().height;
-      if (!height) return;
-      for (const item of markedItems()) {
-        const h = item.getBoundingClientRect().height;
-        if (h > height * LONG_RATIO) {
-          if (!item.hasAttribute(adapter.MARK.long)) adapter.setAttr(item, adapter.MARK.long, '');
-        } else if (item.hasAttribute(adapter.MARK.long)) {
-          item.removeAttribute(adapter.MARK.long);
-        }
+      const items = markedItems();
+      if (!items.length) return;
+
+      // 1) 量自然高度：先撤掉上次给巨型块加的上限，否则量到的是被截断后的高度。
+      //    写和读分开做：先全部写完，再一次性读高度，只触发一次布局。
+      for (const el of items) {
+        adapter.setStyle(el, 'max-height', '');
+        adapter.setStyle(el, 'overflow-y', '');
       }
+      const heights = [];
+      for (const el of items) heights.push(el.getBoundingClientRect().height);
+      const gaps = [];
+      for (const el of items) gaps.push(parseFloat(getComputedStyle(el).marginTop) || 0);
+      let total = 0;
+      for (let i = 0; i < items.length; i += 1) total += heights[i] + gaps[i];
+
+      const ideal = Math.max(1, total / columns);
+      const splitLimit = Math.max(SPLIT_MIN, ideal * SPLIT_RATIO);
+
+      // 2) 比「半列」还高的消息允许跨列（切在列缝上，读到列底就接到下一列顶部）。
+      for (let i = 0; i < items.length; i += 1) {
+        const el = items[i];
+        if (heights[i] > splitLimit) adapter.setAttr(el, adapter.MARK.long, '');
+        else el.removeAttribute(adapter.MARK.long);
+      }
+
+      // 3) 标记之后如果列高还是远高于理想值，说明有「切不开」的巨型块在顶
+      //    （典型：自带横向滚动、因而整体不可分片的代码块）。
+      //    从最高的开始逐个限高，直到列高回到理想值附近；最多处理 3 个，避免反复强制布局。
+      const capAt = Math.max(240, Math.round(ideal * CAP_TARGET));
+      const capped = new Set();
+      let height = column.getBoundingClientRect().height;
+      for (let pass = 0; pass < 3 && height > ideal * CAP_SLACK; pass += 1) {
+        let pick = -1;
+        for (let i = 0; i < items.length; i += 1) {
+          if (capped.has(i) || heights[i] <= ideal) continue;
+          if (pick < 0 || heights[i] > heights[pick]) pick = i;
+        }
+        if (pick < 0) break;
+        capped.add(pick);
+        adapter.setStyle(items[pick], 'max-height', capAt + 'px');
+        adapter.setStyle(items[pick], 'overflow-y', 'auto');
+        height = column.getBoundingClientRect().height;
+      }
+      tuneCapped = capped.size;
     }
 
-    function scheduleTune() {
+    /**
+     * 安排一次重排。
+     * @param {number} delay 毫秒；流式输出时给个小延迟，避免每批 token 都强制同步布局
+     */
+    function scheduleTune(delay) {
       if (tuneRaf) cancelAnimationFrame(tuneRaf);
-      tuneRaf = requestAnimationFrame(() => {
-        tuneRaf = requestAnimationFrame(tune);
-      });
+      if (tuneTimer) clearTimeout(tuneTimer);
+      tuneRaf = 0;
+      tuneTimer = setTimeout(() => {
+        tuneTimer = 0;
+        // 两帧：等浏览器把多列布局算完，再量高度
+        tuneRaf = requestAnimationFrame(() => {
+          tuneRaf = requestAnimationFrame(tune);
+        });
+      }, Math.max(0, Number(delay) || 0));
+    }
+
+    /** 诊断：列数、列高、理想列高、每列内容底、最大留白。 */
+    function diagnose() {
+      if (!applied || !column || !column.isConnected) return { applied: false };
+      const rect = column.getBoundingClientRect();
+      const items = markedItems();
+      const ends = new Map();
+      let total = 0;
+      for (const el of items) {
+        const r = el.getBoundingClientRect();
+        const left = Math.round(r.left - rect.left);
+        const bottom = Math.round(r.bottom - rect.top);
+        ends.set(left, Math.max(ends.get(left) || 0, bottom));
+        total += r.height;
+      }
+      const columnsInfo = Array.from(ends.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([left, end]) => ({ left, end }));
+      const lowest = columnsInfo.length ? Math.min.apply(null, columnsInfo.map((c) => c.end)) : 0;
+      const height = Math.round(rect.height);
+      return {
+        applied: true,
+        columns,
+        height,
+        ideal: Math.round(total / columns),
+        long: items.filter((el) => el.hasAttribute(adapter.MARK.long)).length,
+        capped: tuneCapped,
+        columnsEnd: columnsInfo,
+        // 最大一列留白：列高 - 最矮那列的底
+        blank: Math.max(0, height - lowest)
+      };
     }
 
     function restore() {
       if (tuneRaf) cancelAnimationFrame(tuneRaf);
       tuneRaf = 0;
+      if (tuneTimer) clearTimeout(tuneTimer);
+      tuneTimer = 0;
       for (const item of markedItems()) adapter.resetEl(item);
       if (column) adapter.resetEl(column);
       applied = false;
@@ -105,6 +202,7 @@ DSHC.newspaper = (() => {
     return {
       apply,
       tune: scheduleTune,
+      diagnose,
       restore,
       destroy,
       isApplied: () => applied,
@@ -114,5 +212,5 @@ DSHC.newspaper = (() => {
     };
   }
 
-  return { create, RAIL, LONG_RATIO };
+  return { create, RAIL, SPLIT_RATIO, SPLIT_MIN, CAP_SLACK, CAP_TARGET };
 })();

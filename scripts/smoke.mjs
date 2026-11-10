@@ -492,6 +492,14 @@ run(`
       slot.append(row);
     }
 
+    // 一条比列高得多的巨型块：报纸模式必须把它标成可跨列、并限高
+    const tall = el('div', { 'data-chat-flow-key': 'm6', 'data-chat-flow-kind': 'assistant' });
+    tall.textContent = '一段很长的代码块';
+    tall.rect = { top: 116 + 6 * 312, left: 32, right: 1168, bottom: 116 + 6 * 312 + 3000, width: 1136, height: 3000 };
+    tall.computed = { marginTop: '12px' };
+    rows.push(tall);
+    slot.append(tall);
+
     const olderWrap = el('div');
     const olderBtn = document.createElement('button');
     olderBtn.textContent = '加载更早';
@@ -523,14 +531,16 @@ step('识别到主会话并停在原生', () => {
     '({ reason: window.__dshc.diagnose().target.reason, rows: window.__dshc.diagnose().target.rows, mode: window.__dshc.getState().mode, resolved: window.__dshc.getState().resolved, cap: window.__dshc.getState().caps.column })'
   );
   assert.equal(data.reason, 'ok');
-  assert.equal(data.rows, 6);
+  assert.equal(data.rows, 7);
   assert.equal(data.mode, 'native');
   assert.equal(data.cap, true);
   assert.equal(data.resolved, 2);
 });
 
+run('window.__dshc.setMode("newspaper");');
+await new Promise((resolve) => setTimeout(resolve, 220));
+
 step('报纸模式：列样式与标记就位', () => {
-  run('window.__dshc.setMode("newspaper");');
   const data = read(`(() => {
     const c = __fixture.column;
     return {
@@ -549,9 +559,31 @@ step('报纸模式：列样式与标记就位', () => {
   assert.equal(data.display, 'block');
   assert.equal(data.fill, 'balance');
   assert.equal(data.widthVar, '100%');
-  assert.equal(data.items, 6);
+  assert.equal(data.items, 7);
   assert.equal(data.olderHidden, 'older');
   assert.equal(data.mode, 'newspaper');
+});
+
+step('报纸模式：巨型消息被标成可跨列并限高（压掉底部留白）', () => {
+  const data = read(`(() => {
+    const diag = window.__dshc.diagnose().newspaper;
+    const tall = __fixture.rows[6];
+    return {
+      long: tall.hasAttribute('data-dshc-long'),
+      cap: tall.style.getPropertyValue('max-height'),
+      othersLong: __fixture.rows.slice(0, 6).filter((row) => row.hasAttribute('data-dshc-long')).length,
+      applied: diag.applied,
+      capped: diag.capped,
+      ideal: diag.ideal,
+      height: diag.height
+    };
+  })()`);
+  assert.equal(data.applied, true);
+  assert.equal(data.long, true, '3000px 的块应允许跨列');
+  assert.equal(data.cap, '2320px', '理想列高 2442 × 0.95 = 2320');
+  assert.equal(data.othersLong, 0, '300px 的短消息不应被标成可跨列');
+  assert.equal(data.capped, 1);
+  assert.ok(data.ideal > 0 && data.height > 0);
 });
 
 step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
@@ -578,15 +610,15 @@ step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
   assert.equal(data.active, true);
   assert.equal(data.H, 660);
   assert.equal(data.columns, 2);
-  assert.equal(data.pages, 3);
-  assert.equal(data.total, 1980);
-  assert.equal(data.maxScroll, 1320);
-  assert.equal(data.spacer, '1320px');
+  assert.equal(data.pages, 4);
+  assert.equal(data.total, 2640);
+  assert.equal(data.maxScroll, 1980);
+  assert.equal(data.spacer, '1980px');
   assert.equal(data.hostMark, true);
   assert.equal(data.position, 'sticky');
   assert.equal(data.height, '660px');
   assert.equal(data.overflow, 'hidden');
-  assert.equal(data.items, 6);
+  assert.equal(data.items, 7);
   assert.ok(
     data.transforms.every((value) => value.indexOf('translate3d') === 0),
     '每条消息都应有 translate3d'
@@ -612,7 +644,7 @@ step('复制模式：只读副本 + 分栏 + 隐藏宿主正文', () => {
   })()`);
   assert.equal(data.visible, true);
   assert.equal(data.cols, 2);
-  assert.equal(data.clones, 12, '2 栏 × 6 条：每栏都是完整副本');
+  assert.equal(data.clones, 14, '2 栏 × 7 条：每栏都是完整副本');
   assert.equal(data.hostHidden, 'hidden');
   assert.equal(data.dead, 2, '每个副本里的按钮都应被保留但禁用');
   assert.equal(data.rowMarks, 0, '切换模式时应先把旧标记清掉');

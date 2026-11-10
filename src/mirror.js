@@ -178,6 +178,16 @@ DSHC.mirror = (() => {
         for (const id of Array.from(map.keys())) if (!ids.has(id)) map.delete(id);
       }
 
+      if (!items.length) {
+        for (const entry of cols) {
+          const empty = make('div', 'dshc-empty');
+          empty.textContent = '还没有消息';
+          entry.body.replaceChildren(empty);
+        }
+        lastCount = 0;
+        return;
+      }
+
       const anchors = captureAnchors();
       for (let i = 0; i < cols.length; i += 1) {
         const nodes = [];

@@ -63,7 +63,6 @@ DSHC.newspaper = (() => {
         'column-fill': 'balance',
         'column-gap': math.GAP + 'px',
         'column-width': 'auto',
-        'column-rule': 'none',
         'max-width': 'none',
         width: '100%',
         'box-sizing': 'border-box',

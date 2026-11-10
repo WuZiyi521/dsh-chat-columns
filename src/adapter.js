@@ -228,11 +228,16 @@ DSHC.adapter = (() => {
     return itemOf(el, column) !== null;
   }
 
+  /**
+   * 空的/占位的消息行。
+   * 只做廉价判断（不读 getComputedStyle）：流式输出时每 120ms 会对所有消息调一次，
+   * 逐条读计算样式在长会话里是实打实的开销。宿主隐藏行用的是 hidden 属性，够用。
+   */
   function isBlank(el) {
     if (!el) return true;
+    if (el.hidden || el.hasAttribute('hidden')) return true;
     if (el.childElementCount === 0 && (el.textContent || '').trim() === '') return true;
-    const cs = getComputedStyle(el);
-    return cs.display === 'none';
+    return false;
   }
 
   /**

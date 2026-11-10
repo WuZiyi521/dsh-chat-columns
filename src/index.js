@@ -9,7 +9,7 @@
 DSHC.app = (() => {
   'use strict';
 
-  const VERSION = '3.0.0';
+  const VERSION = '3.1.0';
   const SETTINGS_KEY = 'dshc-settings';
   const MODES = ['native', 'newspaper', 'seamless', 'mirror'];
   const COLS = ['auto', '1', '2', '3'];
@@ -227,13 +227,19 @@ DSHC.app = (() => {
     let note = '';
 
     if (state.mode === 'newspaper') {
-      hideHostOlder(true);
-      if (state.resolved < 2) note = '当前宽度只够 1 列';
-      else newspaper.apply(target, state.resolved);
+      if (state.resolved < 2) {
+        note = '当前宽度只够 1 列';
+      } else {
+        hideHostOlder(true);
+        newspaper.apply(target, state.resolved);
+      }
     } else if (state.mode === 'seamless') {
-      hideHostOlder(true);
-      if (state.resolved < 2) note = '当前宽度只够 1 列';
-      else if (!seamless.apply(target, state.resolved, items)) note = '无缝模式初始化失败，已退回原生';
+      if (state.resolved < 2) {
+        note = '当前宽度只够 1 列';
+      } else {
+        hideHostOlder(true);
+        if (!seamless.apply(target, state.resolved, items)) note = '无缝模式初始化失败，已退回原生';
+      }
     } else if (state.mode === 'mirror') {
       hideHostOlder(true);
       DSHC.adapter.setAttr(target.scroller, 'data-dshc-hide-scrollbar', '');

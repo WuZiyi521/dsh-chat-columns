@@ -349,6 +349,8 @@
 
 [data-dshc-a] {
   column-gap: var(--dshc-col-gap, 40px);
+  /* 报纸的列缝：极细、跟随宿主边框色（不引入插件变量，因为这一层在 #dshc-root 外面） */
+  column-rule: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.09));
 }
 
 [data-dshc-a] [data-dshc-item] {
@@ -534,6 +536,13 @@
 /* 副本里相邻消息的间距（宿主那套边距依赖正文列的选择器，这里补上） */
 #dshc-root .dshc-col-body > [data-dshc-clone] + [data-dshc-clone] {
   margin-top: 16px;
+}
+
+#dshc-root .dshc-empty {
+  padding: 28px 8px;
+  color: var(--dshc-text-3);
+  font-size: var(--dshc-font-size-md);
+  text-align: center;
 }
 
 /* 副本是死的：按钮/表单不可点，文字可选、链接可开 */

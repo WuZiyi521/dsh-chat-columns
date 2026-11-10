@@ -1,0 +1,596 @@
+/*!
+ * dsh-chat-columns 3.0 — Layout & Message Styles
+ * 作用域约定：
+ *  - 插件自己的界面：一律挂在 #dshc-root 下；
+ *  - 宿主元素上的改动：一律带 [data-dshc-*] 标记（由 adapter 快照，可 100% 还原）；
+ *  - 不写裸标签的全局样式，保证对宿主零污染。
+ */
+
+/* ---------------------------------------------------------------- 根容器 */
+
+#dshc-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--dshc-z);
+  pointer-events: none;
+  color: var(--dshc-text);
+  font-family: var(--dshc-font-text);
+  font-size: var(--dshc-font-size);
+  line-height: 1.5;
+}
+
+#dshc-root [hidden] {
+  display: none !important;
+}
+
+#dshc-root :focus-visible {
+  outline: 2px solid var(--dshc-focus);
+  outline-offset: 2px;
+}
+
+/* 只规范化插件自己的盒子；克隆进镜像的宿主内容保持宿主原样 */
+#dshc-root .dshc-ctl,
+#dshc-root .dshc-ctl-toggle,
+#dshc-root .dshc-panel,
+#dshc-root .dshc-pill,
+#dshc-root .dshc-view,
+#dshc-root .dshc-bar,
+#dshc-root .dshc-cols,
+#dshc-root .dshc-col,
+#dshc-root .dshc-col-head,
+#dshc-root .dshc-col-body {
+  box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------- 控制器 */
+
+#dshc-root .dshc-ctl {
+  position: absolute;
+  top: 72px;
+  right: 18px;
+  width: 38px;
+  pointer-events: auto;
+}
+
+#dshc-root .dshc-ctl-toggle {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: var(--dshc-text-2);
+  background: var(--dshc-bg-elevated);
+  border: 1px solid var(--dshc-border);
+  border-radius: 12px;
+  box-shadow: var(--dshc-shadow);
+  opacity: 0.76;
+  cursor: pointer;
+  transition: opacity 0.12s linear, color 0.12s linear;
+}
+
+#dshc-root .dshc-ctl-toggle:hover,
+#dshc-root .dshc-ctl[data-dshc-open="true"] .dshc-ctl-toggle,
+#dshc-root .dshc-ctl-toggle:focus-visible {
+  opacity: 1;
+  color: var(--dshc-text);
+}
+
+#dshc-root .dshc-ctl[data-dshc-open="true"] .dshc-ctl-toggle {
+  border-color: var(--dshc-border-l2);
+}
+
+#dshc-root .dshc-ctl-icon {
+  display: inline-flex;
+  height: 16px;
+}
+
+#dshc-root .dshc-ctl-mark {
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--dshc-text-3);
+}
+
+#dshc-root .dshc-ctl-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+#dshc-root .dshc-ctl[data-dshc-mode="newspaper"] .dshc-ctl-dot,
+#dshc-root .dshc-ctl[data-dshc-mode="seamless"] .dshc-ctl-dot,
+#dshc-root .dshc-ctl[data-dshc-mode="mirror"] .dshc-ctl-dot {
+  background: var(--dshc-accent);
+}
+
+#dshc-root .dshc-ctl[data-dshc-status="error"] .dshc-ctl-dot {
+  background: var(--dshc-danger);
+}
+
+#dshc-root .dshc-ctl[data-dshc-status="busy"] .dshc-ctl-dot {
+  background: var(--dshc-accent);
+  animation: dshc-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes dshc-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+#dshc-root .dshc-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 286px;
+  max-height: 420px;
+  overflow: auto;
+  padding: var(--dshc-pad);
+  background: var(--dshc-bg-elevated);
+  border: 1px solid var(--dshc-border);
+  border-radius: 14px;
+  box-shadow: var(--dshc-shadow);
+  color: var(--dshc-text);
+}
+
+/* 毛玻璃只在支持时启用；不支持就是上面的不透明背景（对比度兜底） */
+@supports ((backdrop-filter: blur(10px)) or (-webkit-backdrop-filter: blur(10px))) {
+  #dshc-root .dshc-ctl-toggle {
+    background: color-mix(in srgb, var(--dshc-bg-elevated) 86%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    backdrop-filter: blur(12px) saturate(1.2);
+  }
+}
+
+#dshc-root .dshc-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#dshc-root .dshc-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#dshc-root .dshc-panel-sub {
+  font-size: var(--dshc-font-size-sm);
+  color: var(--dshc-text-3);
+}
+
+#dshc-root .dshc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#dshc-root .dshc-label {
+  font-size: var(--dshc-font-size-sm);
+  color: var(--dshc-text-3);
+}
+
+#dshc-root .dshc-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--dshc-hover);
+  border-radius: 9px;
+}
+
+#dshc-root .dshc-seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 4px;
+  font: inherit;
+  font-size: var(--dshc-font-size-md);
+  color: var(--dshc-text-2);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+#dshc-root .dshc-seg button:hover:not(:disabled) {
+  color: var(--dshc-text);
+}
+
+#dshc-root .dshc-seg button[aria-pressed="true"] {
+  color: var(--dshc-text);
+  background: var(--dshc-bg-elevated);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+}
+
+#dshc-root .dshc-seg button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+#dshc-root .dshc-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--dshc-font-size-md);
+  color: var(--dshc-text-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+#dshc-root .dshc-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#dshc-root .dshc-switch-ui {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  background: var(--dshc-border-l2);
+  border-radius: 999px;
+  transition: background 0.12s linear;
+}
+
+#dshc-root .dshc-switch-ui::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.12s linear;
+}
+
+#dshc-root .dshc-switch input:checked + .dshc-switch-ui {
+  background: var(--dshc-accent);
+}
+
+#dshc-root .dshc-switch input:checked + .dshc-switch-ui::after {
+  transform: translateX(12px);
+}
+
+#dshc-root .dshc-switch input:focus-visible + .dshc-switch-ui {
+  outline: 2px solid var(--dshc-focus);
+  outline-offset: 2px;
+}
+
+#dshc-root .dshc-status {
+  min-height: 16px;
+  font-size: var(--dshc-font-size-sm);
+  line-height: 1.5;
+  color: var(--dshc-text-3);
+  overflow-wrap: anywhere;
+}
+
+#dshc-root .dshc-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#dshc-root .dshc-action {
+  padding: 5px 10px;
+  font: inherit;
+  font-size: var(--dshc-font-size-md);
+  color: var(--dshc-text);
+  background: var(--dshc-hover);
+  border: 1px solid var(--dshc-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#dshc-root .dshc-action:hover:not(:disabled) {
+  border-color: var(--dshc-border-l2);
+}
+
+#dshc-root .dshc-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+#dshc-root .dshc-note {
+  font-size: var(--dshc-font-size-sm);
+  line-height: 1.5;
+  color: var(--dshc-text-3);
+}
+
+/* 顶部手动「加载更早」胶囊 */
+#dshc-root .dshc-pill {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  font: inherit;
+  font-size: var(--dshc-font-size-md);
+  color: var(--dshc-text-2);
+  background: var(--dshc-bg-elevated);
+  border: 1px solid var(--dshc-border);
+  border-radius: 999px;
+  box-shadow: var(--dshc-shadow);
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+#dshc-root .dshc-pill:hover {
+  opacity: 1;
+  color: var(--dshc-text);
+}
+
+#dshc-root .dshc-pill-icon {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--dshc-text-3);
+}
+
+/* ================================================================= A 报纸 */
+
+[data-dshc-a] {
+  column-gap: var(--dshc-col-gap, 40px);
+}
+
+[data-dshc-a] [data-dshc-item] {
+  min-width: 0;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+
+/* 超长消息允许跨列：否则均衡分栏会把列高抬到它那么高，其它列一片空白 */
+[data-dshc-a] [data-dshc-item][data-dshc-long] {
+  break-inside: auto;
+  -webkit-column-break-inside: auto;
+}
+
+[data-dshc-a] pre,
+[data-dshc-a] table {
+  max-width: 100%;
+}
+
+[data-dshc-a] pre {
+  overflow-x: auto;
+}
+
+[data-dshc-a] img,
+[data-dshc-a] video,
+[data-dshc-a] canvas,
+[data-dshc-a] svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ================================================================= B 无缝 */
+
+/* 逻辑高度占位层：只提供滚动行程，不显示任何内容 */
+[data-dshc-b-host]::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: var(--dshc-spacer, 0px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+[data-dshc-b="column"] {
+  isolation: isolate;
+}
+
+[data-dshc-b="item"] {
+  overflow-x: hidden;
+}
+
+/* 宿主自己的「加载更早」按钮、生成中指示、占位在 B 下会被压到第一列顶端 */
+[data-dshc-hide] {
+  display: none !important;
+}
+
+/* ================================================================= C 复制 */
+
+#dshc-root .dshc-view {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--dshc-bg);
+  border: 1px solid var(--dshc-border);
+  border-radius: 12px;
+  box-shadow: var(--dshc-shadow);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+#dshc-root .dshc-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  /* 右侧给控制器的悬浮胶囊让位，否则胶囊会压在「拉取更早历史」按钮上 */
+  padding: 8px 118px 8px 14px;
+  border-bottom: 1px solid var(--dshc-border);
+  background: var(--dshc-bg-elevated);
+}
+
+#dshc-root .dshc-bar-title {
+  font-size: var(--dshc-font-size-md);
+  font-weight: 600;
+  color: var(--dshc-text);
+}
+
+#dshc-root .dshc-bar-sub {
+  font-size: var(--dshc-font-size-sm);
+  color: var(--dshc-text-3);
+}
+
+#dshc-root .dshc-bar-state {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--dshc-font-size-sm);
+  color: var(--dshc-text-3);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dshc-root .dshc-view[data-state="error"] .dshc-bar-state {
+  color: var(--dshc-danger);
+}
+
+#dshc-root .dshc-bar-action {
+  flex: none;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: var(--dshc-font-size-md);
+  color: var(--dshc-text-2);
+  background: var(--dshc-hover);
+  border: 1px solid var(--dshc-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#dshc-root .dshc-bar-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+#dshc-root .dshc-cols {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--dshc-c-gap);
+  min-height: 0;
+  padding: 12px 14px 14px;
+}
+
+#dshc-root .dshc-col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--dshc-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+#dshc-root .dshc-col-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dshc-border);
+  background: var(--dshc-bg-elevated);
+}
+
+#dshc-root .dshc-col-name {
+  font-size: var(--dshc-font-size-sm);
+  font-weight: 600;
+  color: var(--dshc-text-2);
+}
+
+#dshc-root .dshc-col-tag {
+  font-size: 10px;
+  color: var(--dshc-text-3);
+}
+
+#dshc-root .dshc-col-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  container-type: inline-size;
+  overscroll-behavior: contain;
+  user-select: text;
+}
+
+/* 副本里相邻消息的间距（宿主那套边距依赖正文列的选择器，这里补上） */
+#dshc-root .dshc-col-body > [data-dshc-clone] + [data-dshc-clone] {
+  margin-top: 16px;
+}
+
+/* 副本是死的：按钮/表单不可点，文字可选、链接可开 */
+#dshc-root .dshc-c-dead,
+#dshc-root .dshc-col-body [data-dshc-clone] button,
+#dshc-root .dshc-col-body [data-dshc-clone] input,
+#dshc-root .dshc-col-body [data-dshc-clone] select,
+#dshc-root .dshc-col-body [data-dshc-clone] textarea {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+#dshc-root .dshc-col-body [data-dshc-clone] a {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------ 宿主滚动条 */
+
+[data-dshc-hide-scrollbar] {
+  scrollbar-width: none;
+}
+
+[data-dshc-hide-scrollbar]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* ---------------------------------------------------------------- 窄屏 */
+
+@media (max-width: 767px) {
+  #dshc-root .dshc-ctl-toggle {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  #dshc-root .dshc-ctl-mark {
+    display: none;
+  }
+
+  #dshc-root .dshc-ctl {
+    width: 32px;
+  }
+
+  #dshc-root .dshc-panel {
+    width: min(268px, calc(100vw - 24px));
+  }
+
+  #dshc-root .dshc-cols {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  #dshc-root .dshc-col {
+    min-height: 240px;
+    flex: 1 1 auto;
+  }
+}

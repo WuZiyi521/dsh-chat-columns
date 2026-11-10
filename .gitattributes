@@ -1,0 +1,4 @@
+# 统一用 LF：bundle 是把 src/ 原样拼进去的，换行不要随平台漂移
+* text=auto eol=lf
+
+*.png binary

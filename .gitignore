@@ -1,0 +1,15 @@
+# 依赖与产物
+node_modules/
+pnpm-lock.yaml
+
+# 备份/临时文件
+*.bak
+*.bak-*
+*.log
+.DS_Store
+Thumbs.db
+
+# 内部任务文档：只在本机保留，不发布
+3.0重构-精简修订版.txt
+UI设计规范.txt
+原始文档README.md

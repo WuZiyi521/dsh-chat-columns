@@ -1,0 +1,116 @@
+/*!
+ * dsh-chat-columns 3.0 — Design Tokens
+ * 作用域：#dshc-root 内；宿主令牌优先，缺失时按主题回退。
+ * 这里只定义变量与小工具类，禁止裸写全局标签样式。
+ */
+
+#dshc-root {
+  color-scheme: light;
+
+  --dshc-bg: var(--dsw-alias-bg-base, #ffffff);
+  --dshc-bg-elevated: var(--dsw-alias-bg-elevated, #ffffff);
+  --dshc-text: var(--dsw-alias-label-primary, #1a1a1a);
+  --dshc-text-2: var(--dsw-alias-label-secondary, #4b4a45);
+  --dshc-text-3: var(--dsw-alias-label-tertiary, #6b6a63);
+  --dshc-border: var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  --dshc-border-l2: var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.16));
+  --dshc-hover: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, 0.05));
+  --dshc-accent: var(--dsw-alias-state-business-primary, #3964fe);
+  --dshc-danger: var(--dsw-alias-state-error-primary, #d92d20);
+  --dshc-success: var(--dsw-alias-state-success-primary, #12805c);
+  --dshc-focus: var(--dsw-focus-ring-color, #3964fe);
+  --dshc-thumb: var(--dsh-scrollbar-thumb, rgba(0, 0, 0, 0.26));
+  --dshc-shadow: var(--dsw-elevation-panel, 0 10px 30px rgba(0, 0, 0, 0.16));
+
+  --dshc-radius: var(--dsw-radius-md, 10px);
+  --dshc-radius-sm: var(--dsw-radius-sm, 8px);
+
+  --dshc-font-text: var(
+    --dsw-font-family,
+    var(--dsh-font-family-text-default, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif)
+  );
+  --dshc-font-mono: var(
+    --dsw-font-family-mono,
+    var(--dsh-font-family-code-default, "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace)
+  );
+  --dshc-font-size: var(--dsh-content-font-size, 14px);
+  --dshc-font-size-sm: 11px;
+  --dshc-font-size-md: 12px;
+
+  --dshc-col-gap: 40px;
+  --dshc-c-gap: 20px;
+  --dshc-pad: 12px;
+  --dshc-z: 40;
+
+  color: var(--dshc-text);
+  font-family: var(--dshc-font-text);
+  font-size: var(--dshc-font-size);
+}
+
+#dshc-root[data-dshc-theme="dark"] {
+  color-scheme: dark;
+
+  --dshc-bg: var(--dsw-alias-bg-base, #1c1b1a);
+  --dshc-bg-elevated: var(--dsw-alias-bg-elevated, #242321);
+  --dshc-text: var(--dsw-alias-label-primary, #f2f1ee);
+  --dshc-text-2: var(--dsw-alias-label-secondary, #c9c7c0);
+  --dshc-text-3: var(--dsw-alias-label-tertiary, #9c9a93);
+  --dshc-border: var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.12));
+  --dshc-border-l2: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.2));
+  --dshc-hover: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.07));
+  --dshc-accent: var(--dsw-alias-state-business-primary, #6d8cff);
+  --dshc-danger: var(--dsw-alias-state-error-primary, #ff6b60);
+  --dshc-success: var(--dsw-alias-state-success-primary, #4bd1a0);
+  --dshc-focus: var(--dsw-focus-ring-color, #6d8cff);
+  --dshc-thumb: var(--dsh-scrollbar-thumb, rgba(255, 255, 255, 0.3));
+  --dshc-shadow: var(--dsw-elevation-panel, 0 10px 30px rgba(0, 0, 0, 0.5));
+}
+
+/* 数据/状态用等宽字体，正文用系统字体 */
+#dshc-root .dshc-mono,
+#dshc-root .dshc-bar-sub,
+#dshc-root .dshc-col-tag,
+#dshc-root .dshc-status {
+  font-family: var(--dshc-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 极细滚动条：只在插件自己的容器内 */
+#dshc-root .dshc-col-body,
+#dshc-root .dshc-panel {
+  scrollbar-width: thin;
+  scrollbar-color: var(--dshc-thumb) transparent;
+}
+
+#dshc-root .dshc-col-body::-webkit-scrollbar,
+#dshc-root .dshc-panel::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+#dshc-root .dshc-col-body::-webkit-scrollbar-track,
+#dshc-root .dshc-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#dshc-root .dshc-col-body::-webkit-scrollbar-thumb,
+#dshc-root .dshc-panel::-webkit-scrollbar-thumb {
+  background: var(--dshc-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+/* 无动效偏好：关掉全部位移/展开动画 */
+@media (prefers-reduced-motion: reduce) {
+  #dshc-root .dshc-ctl,
+  #dshc-root .dshc-ctl-toggle,
+  #dshc-root .dshc-panel,
+  #dshc-root .dshc-pill,
+  #dshc-root .dshc-switch-ui,
+  #dshc-root .dshc-switch-ui::after,
+  #dshc-root .dshc-ctl-dot {
+    transition: none !important;
+    animation: none !important;
+  }
+}

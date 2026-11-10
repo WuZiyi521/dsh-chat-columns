@@ -1,0 +1,5 @@
+# dsh-chat-columns 3.0 bundle layer：按包名引用插件。
+# 安装后由 profile 的 dsh.profile.bundles 选中，Loader 才能加载它。
+- insert:
+    - id: chat-columns-3
+      name: dsh-chat-columns-3

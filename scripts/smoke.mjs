@@ -675,6 +675,8 @@ step('切回原生：宿主全部还原', () => {
         document.querySelectorAll('[data-dshc-item]').length +
         document.querySelectorAll('[data-dshc-long]').length,
       overlay: document.querySelector('section[data-mode=mirror]').hidden,
+      preOverflow: __fixture.rows[6].querySelector('pre').style.getPropertyValue('overflow'),
+      preWrap: __fixture.rows[6].querySelector('pre').style.getPropertyValue('white-space'),
       mode: window.__dshc.getState().mode
     };
   })()`);
@@ -683,6 +685,8 @@ step('切回原生：宿主全部还原', () => {
   assert.equal(data.visibility, '');
   assert.equal(data.leftovers, 0, '页面上不应残留任何插件标记');
   assert.equal(data.overlay, true);
+  assert.equal(data.preOverflow, '', '代码块上的 overflow 放开也要还原');
+  assert.equal(data.preWrap, '', '代码块上的软换行也要还原');
   assert.equal(data.mode, 'native');
 });
 

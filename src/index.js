@@ -24,7 +24,9 @@ DSHC.app = (() => {
     autoLoad: Object.assign({}, DEFAULT_AUTO),
     variant: 'vertical',
     pageStep: 'screen',
-    resolved: 1
+    resolved: 1,
+    /** B′ 连续流：内部实验开关，不是用户可见模式。 */
+    flow: false
   };
 
   const target = { scroller: null, column: null, reason: 'no-conversation', rows: 0 };
@@ -43,6 +45,7 @@ DSHC.app = (() => {
   let newspaper = null;
   let seamless = null;
   let paged = null;
+  let flow = null;
   let mirror = null;
 
   let themeWatch = null;
@@ -176,6 +179,7 @@ DSHC.app = (() => {
   function resetHost() {
     if (newspaper) newspaper.restore();
     if (seamless) seamless.restore();
+    if (flow) flow.restore();
     if (paged) paged.restore();
     if (mirror) mirror.restore();
     if (target.column) {
@@ -251,9 +255,12 @@ DSHC.app = (() => {
         note = '当前宽度只够 1 列';
       } else {
         hideHostOlder(true);
+        const useFlow = state.variant === 'vertical' && state.flow && flow;
         const ok =
           state.variant === 'vertical'
-            ? seamless.apply(target, state.resolved, items)
+            ? (useFlow
+                ? flow.apply(target, state.resolved, items)
+                : seamless.apply(target, state.resolved, items))
             : paged.apply(target, state.resolved, {
                 progress: state.variant === 'horizontal' ? 'linear' : 'page',
                 stepCols: state.pageStep === 'screen' ? state.resolved : Number(state.pageStep)
@@ -289,6 +296,7 @@ DSHC.app = (() => {
       newspaper.tune();
     } else if (state.mode === 'seamless') {
       if (state.variant !== 'vertical') paged.update();
+      else if (state.flow && flow) flow.update(itemsFromIndex(), change.dirty);
       else seamless.update(itemsFromIndex(), change.dirty);
     } else if (state.mode === 'mirror') {
       mirror.update(itemsFromIndex(), { history: history ? history.snapshot() : null }, change);
@@ -388,6 +396,8 @@ DSHC.app = (() => {
             progress: state.variant === 'horizontal' ? 'linear' : 'page',
             stepCols: state.pageStep === 'screen' ? state.resolved : Number(state.pageStep)
           });
+        } else if (state.flow && flow) {
+          flow.relayout();
         } else {
           seamless.relayout();
         }
@@ -467,6 +477,18 @@ DSHC.app = (() => {
     else render();
   }
 
+  /**
+   * 内部实验开关：B 模式换用「连续流 + 边界副本」引擎。
+   * 不是用户可见的第四种模式，只为验收期 A/B 用。
+   */
+  function setFlow(value) {
+    const next = !!value;
+    if (next === state.flow) return;
+    state.flow = next;
+    if (state.mode === 'seamless') applyMode();
+    else render();
+  }
+
   function nextPage() {
     if (state.mode === 'seamless' && state.variant !== 'vertical' && paged) paged.next();
   }
@@ -533,6 +555,7 @@ DSHC.app = (() => {
     newspaper = DSHC.newspaper.create({});
     seamless = DSHC.seamless.create({});
     paged = DSHC.paged.create({ onChange: () => render() });
+    flow = DSHC.flow.create({});
     mirror = DSHC.mirror.create({
       onNeedMore: () => {
         if (history) history.request('auto');
@@ -679,6 +702,7 @@ DSHC.app = (() => {
       available: Math.round(availableWidth()),
       newspaper: newspaper ? newspaper.diagnose() : null,
       seamless: seamless ? seamless.diagnose() : null,
+      flow: flow ? flow.diagnose() : null,
       paged: paged ? paged.diagnose() : null,
       mirror: mirror ? { active: mirror.isActive() } : null,
       history: history ? history.snapshot() : null
@@ -710,6 +734,7 @@ DSHC.app = (() => {
     setAutoLoad,
     setVariant,
     setPageStep,
+    setFlow,
     nextPage,
     prevPage,
     setPage,
@@ -754,6 +779,7 @@ DSHC.app = (() => {
       setAutoLoad,
       setVariant,
       setPageStep,
+      setFlow,
       nextPage,
       prevPage,
       setPage,

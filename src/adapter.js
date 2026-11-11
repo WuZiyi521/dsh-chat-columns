@@ -528,6 +528,38 @@ DSHC.adapter = (() => {
     return root;
   }
 
+  /* ------------------------------------------------ B′ 边界副本（只读） */
+
+  /**
+   * B′ 连续流的「边界副本」：同一条消息在另一个列窗口里再画一份。
+   *
+   * 净化口径与 C 一致（剥宿主身份属性、去 id/name、禁用表单与按钮、剥内联事件），
+   * 额外的三条是 B′ 特有的：
+   *  - `aria-hidden` + `inert`：读屏不重复朗读，也不进 Tab 序；
+   *  - `pointer-events: none` + `user-select: none`：点不动，也**选不进**，
+   *    避免跨缝选中把两份文字一起选出来（那才会一眼假）；
+   *  - `data-dshc-clone`：退出时按这个标记整体清理。
+   *
+   * 副本不是宿主节点，不进样式快照，由调用方负责移除。
+   *
+   * @param {HTMLElement} el 宿主原生消息行
+   * @returns {HTMLElement|null}
+   */
+  function overlayClone(el) {
+    if (!el) return null;
+    const copy = el.cloneNode(true);
+    if (!copy || copy.nodeType !== 1) return null;
+    for (const name of HOST.stripped) copy.removeAttribute(name);
+    sanitize(copy);
+    copy.setAttribute(MARK.cloneId, 'flow');
+    copy.setAttribute('aria-hidden', 'true');
+    copy.setAttribute('inert', '');
+    copy.style.setProperty('pointer-events', 'none');
+    copy.style.setProperty('user-select', 'none');
+    copy.style.setProperty('-webkit-user-select', 'none');
+    return copy;
+  }
+
   /* -------------------------------------------------- 内容适配（A/B 共用） */
 
   /** 被「内容适配」改过的节点，退出时统一还原。 */
@@ -642,6 +674,7 @@ DSHC.adapter = (() => {
     captureAnchor,
     restoreAnchor,
     sanitize,
+    overlayClone,
     fitContent,
     unfitContent,
     watchForScroller

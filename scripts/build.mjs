@@ -22,6 +22,7 @@ const MODULES = [
   'newspaper.js',
   'seamless.js',
   'paged.js',
+  'flow.js',
   'mirror.js',
   'controller.js',
   'index.js'

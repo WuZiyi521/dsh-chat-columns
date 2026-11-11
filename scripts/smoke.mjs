@@ -650,6 +650,65 @@ step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
   );
 });
 
+step('连续流（B′）：连续堆叠 + 边界副本 + 只读副本净化', () => {
+  run('window.__dshc.setFlow(true);');
+  const data = read(`(() => {
+    const diag = window.__dshc.diagnose().flow;
+    const c = __fixture.column;
+    const clones = Array.from(c.children).filter((node) => node.hasAttribute('data-dshc-clone'));
+    const first = clones[0];
+    const crossing = __fixture.rows[2];
+    return {
+      active: diag.active,
+      H: diag.H,
+      columns: diag.columns,
+      total: diag.total,
+      maxScroll: diag.maxScroll,
+      expected: diag.expectedScrollHeight,
+      spacer: __fixture.wrap.style.getPropertyValue('--dshc-spacer'),
+      oversized: diag.oversized,
+      views: diag.views,
+      cloneCount: clones.length,
+      clone: first
+        ? {
+            pointer: first.style.getPropertyValue('pointer-events'),
+            select: first.style.getPropertyValue('user-select'),
+            aria: first.getAttribute('aria-hidden'),
+            inert: first.hasAttribute('inert'),
+            itemKey: first.getAttribute('data-chat-flow-key')
+          }
+        : null,
+      crossingTransform: crossing.style.getPropertyValue('transform'),
+      tallMax: __fixture.rows[6].style.getPropertyValue('max-height'),
+      tallOverflow: __fixture.rows[6].style.getPropertyValue('overflow-y')
+    };
+  })()`);
+
+  assert.equal(data.active, true);
+  assert.equal(data.H, 660);
+  assert.equal(data.columns, 2);
+  // 连续堆叠：6×300（含 12 间距）+ 超长消息裁到 2×660
+  assert.equal(data.total, 3192);
+  assert.equal(data.maxScroll, 1872);
+  assert.equal(data.expected, 2532);
+  assert.equal(data.spacer, '1872px', '占位层 = 内容总高 − 列数×H');
+  assert.ok(data.cloneCount >= 1, '跨缝的消息必须有边界副本');
+  assert.equal(data.views > data.cloneCount, true, '视图数 = 原件 + 副本');
+  // 副本是只读的：点不动、选不进、读屏不重复、不带宿主身份
+  assert.equal(data.clone.pointer, 'none');
+  assert.equal(data.clone.select, 'none');
+  assert.equal(data.clone.aria, 'true');
+  assert.equal(data.clone.inert, true);
+  assert.equal(data.clone.itemKey, null);
+  // 跨缝那条：原件放末段（第 2 列），所以 transform 落在第 2 列的横坐标上
+  assert.ok(data.crossingTransform.indexOf('translate3d(566px') === 0, data.crossingTransform);
+  // 超长消息：不静默截断，限高 + 自己滚
+  assert.equal(data.tallMax, '1320px');
+  assert.equal(data.tallOverflow, 'auto');
+
+  run('window.__dshc.setFlow(false);');
+});
+
 step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', () => {
   run('window.__dshc.setVariant("paged");');
   const paged = read(`(() => {

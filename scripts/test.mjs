@@ -98,6 +98,47 @@ test('任何情况下消息都不跨列', () => {
   }
 });
 
+console.log('math: B′ 连续流');
+
+test('连续堆叠：starts 是前缀和，不再按页对齐', () => {
+  const flow = math.flowStarts([{ height: 120 }, { height: 80 }, { height: 300, gap: 20 }], 12);
+  assert.deepEqual([...flow.starts], [0, 132, 232]);
+  assert.equal(flow.total, 532);
+  assert.deepEqual([...flow.heights], [120, 80, 300]);
+});
+
+test('底边单调：starts[i+1] + 高 >= starts[i] + 高（二分的前提）', () => {
+  const flow = math.flowStarts([{ height: 500 }, { height: 10 }, { height: 900 }, { height: 0 }], 12);
+  let last = -1;
+  for (let i = 0; i < flow.starts.length; i += 1) {
+    const bottom = flow.starts[i] + flow.heights[i];
+    assert.ok(bottom >= last, 'i=' + i);
+    last = bottom;
+  }
+});
+
+test('可见范围：二分只返回与窗口相交的消息', () => {
+  const flow = math.flowStarts([{ height: 100 }, { height: 100 }, { height: 100 }, { height: 100 }], 0);
+  // 窗口 [50, 250) 覆盖第 0 条尾部、第 1 条整条、第 2 条头部
+  const r = math.visibleRange(flow.starts, flow.heights, 50, 200);
+  assert.deepEqual({ from: r.from, to: r.to }, { from: 0, to: 3 });
+});
+
+test('可见范围：空集合与窗口落在末尾之外', () => {
+  assert.deepEqual({ ...math.visibleRange([], [], 0, 300) }, { from: 0, to: 0 });
+  const flow = math.flowStarts([{ height: 100 }], 0);
+  const r = math.visibleRange(flow.starts, flow.heights, 500, 300);
+  assert.deepEqual({ from: r.from, to: r.to }, { from: 1, to: 1 });
+});
+
+test('超长消息：按可见上限裁剪后仍可参与二分', () => {
+  const limit = 600;
+  const flow = math.flowStarts([{ height: 400 }, { height: Math.min(2000, limit) }, { height: 100 }], 0);
+  assert.equal(flow.total, 1100);
+  const r = math.visibleRange(flow.starts, flow.heights, 300, 600);
+  assert.ok(r.from <= 1 && r.to >= 2);
+});
+
 console.log('math: B 投影');
 
 test('逻辑位置按 H 落入对应列', () => {

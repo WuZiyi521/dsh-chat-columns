@@ -102,6 +102,69 @@ DSHC.math = (() => {
   }
 
   /**
+   * B′ 连续流：不按页对齐，starts[i] = 前面所有消息（含间距）的高度和。
+   *
+   * 与 pack() 的区别：不再有「放不下就另起一列」，因此列底不会留白；
+   * 代价是消息可能跨列缝，由渲染层用「边界副本」补上连续性。
+   *
+   * @param {Array<{height: number, gap?: number}>} blocks 按 DOM 顺序的消息高度（已按可见上限裁剪）
+   * @param {number} gap 默认行间距
+   * @returns {{starts: number[], heights: number[], total: number}}
+   *   starts 单调不减，且 starts[i+1] >= starts[i] + heights[i]（内部保证二分查找的前提）
+   */
+  function flowStarts(blocks, gap) {
+    const g0 = Math.max(0, gap === undefined ? 0 : Number(gap) || 0);
+    const starts = [];
+    const heights = [];
+    let y = 0;
+    for (let i = 0; i < blocks.length; i += 1) {
+      const block = blocks[i] || {};
+      const height = Math.max(0, Number(block.height) || 0);
+      const g = i === 0 ? 0 : Math.max(0, block.gap === undefined ? g0 : Number(block.gap) || 0);
+      y += g;
+      starts.push(y);
+      heights.push(height);
+      y += height;
+    }
+    return { starts, heights, total: y };
+  }
+
+  /**
+   * 可见范围：二分查找与 [scroll, scroll + span) 相交的消息下标区间 [from, to)。
+   *
+   * 前提（flowStarts 保证）：starts 单调不减，且底边 starts[i] + heights[i] 也单调不减。
+   * 因此「底边 > top」这个判据在区间上是单调的，可以二分。
+   * 复杂度 O(log N)，与历史消息总数无关 —— 每帧只碰当前可见的那几条。
+   *
+   * @returns {{from: number, to: number}} 半开区间；没有消息时 from === to
+   */
+  function visibleRange(starts, heights, scroll, span) {
+    const n = starts.length;
+    if (!n) return { from: 0, to: 0 };
+    const top = Number(scroll) || 0;
+    const bottom = top + Math.max(0, Number(span) || 0);
+    const bottomOf = (i) => starts[i] + heights[i];
+
+    let lo = 0;
+    let hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (bottomOf(mid) <= top) lo = mid + 1;
+      else hi = mid;
+    }
+    const from = lo;
+
+    lo = from;
+    hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (starts[mid] < bottom) lo = mid + 1;
+      else hi = mid;
+    }
+    return { from, to: lo };
+  }
+
+  /**
    * B 的屏幕投影：逻辑位置 y 在滚动量 s 下落在第几列、列内多高。
    * 第 c 列显示逻辑区间 [s + cH, s + (c+1)H)。
    */
@@ -126,6 +189,8 @@ DSHC.math = (() => {
     resolveColumns,
     columnWidth,
     pack,
+    flowStarts,
+    visibleRange,
     project,
     round
   };

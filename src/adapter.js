@@ -677,9 +677,34 @@ DSHC.adapter = (() => {
   function toolbarAnchor() {
     const outlet = document.querySelector('[data-slot="conversation.session.header.actions"]');
     if (!outlet) return null;
-    const rect = outlet.getBoundingClientRect();
-    if (!(rect.height > 0) || !(rect.width >= 0)) return null;
-    return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height };
+
+    // 槽位锚点本身是 display:contents（不产生盒子），getBoundingClientRect 会是 0×0。
+    // 所以取它子元素的并集；子元素也没有时退回父容器。
+    const boxes = [];
+    for (const child of Array.from(outlet.children)) {
+      const rect = child.getBoundingClientRect();
+      if (rect.height > 0 && rect.width > 0) boxes.push(rect);
+    }
+    let left;
+    let right;
+    let top;
+    let bottom;
+    if (boxes.length) {
+      left = Math.min.apply(null, boxes.map((r) => r.left));
+      right = Math.max.apply(null, boxes.map((r) => r.right));
+      top = Math.min.apply(null, boxes.map((r) => r.top));
+      bottom = Math.max.apply(null, boxes.map((r) => r.bottom));
+    } else if (outlet.parentElement) {
+      const rect = outlet.parentElement.getBoundingClientRect();
+      if (!(rect.height > 0)) return null;
+      left = rect.left;
+      right = rect.right;
+      top = rect.top;
+      bottom = rect.bottom;
+    } else {
+      return null;
+    }
+    return { top, bottom, left, right, height: bottom - top };
   }
 
   /* ------------------------------------------- 正文列被替换（切会话）的观察 */

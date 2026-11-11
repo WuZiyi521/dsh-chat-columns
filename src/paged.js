@@ -144,11 +144,12 @@ DSHC.paged = (() => {
     }
 
     /** 翻到第 p 页（平滑横向滚动）。 */
-    function goTo(next) {
+    function goTo(next, options) {
       if (!host) return;
+      const smooth = !options || options.smooth !== false;
       const target = clampPage(next);
       const left = Math.min(maxLeft(), target * pageWidth());
-      if (typeof host.scrollTo === 'function') {
+      if (smooth && typeof host.scrollTo === 'function') {
         try {
           host.scrollTo({ left, behavior: 'smooth' });
         } catch (error) {
@@ -157,7 +158,25 @@ DSHC.paged = (() => {
       } else {
         host.scrollLeft = left;
       }
+      lastWrite = host.scrollLeft;
       page = target;
+      onChange();
+    }
+
+    /** 直接贴到纸带最右端（布局可能还没算完，所以按帧重试几次）。 */
+    function snapToEnd(attempts) {
+      if (!active || !host) return;
+      if (!followEnd) return;
+      host.scrollLeft = Math.max(0, maxLeft());
+      lastWrite = host.scrollLeft;
+      page = Math.max(0, pages - 1);
+      if (attempts > 0) {
+        if (wakeRaf) cancelAnimationFrame(wakeRaf);
+        wakeRaf = requestAnimationFrame(() => {
+          wakeRaf = 0;
+          snapToEnd(attempts - 1);
+        });
+      }
       onChange();
     }
 
@@ -219,6 +238,10 @@ DSHC.paged = (() => {
 
     function onHostScroll() {
       if (!active || scrollRaf) return;
+      // 用户自己滚的（不是我们写的）→ 停止跟随，别和用户抢位置。
+      if (host && lastWrite >= 0 && Math.abs(host.scrollLeft - lastWrite) > 4) {
+        followEnd = host.scrollLeft >= maxScroll() - 8;
+      }
       scrollRaf = requestAnimationFrame(() => {
         scrollRaf = 0;
         if (!active) return;
@@ -319,6 +342,10 @@ DSHC.paged = (() => {
 
     /** 进入后等一帧再对齐右端（纸带宽度要等样式生效后才算得准）。 */
     let wakeRaf = 0;
+    /** 是否跟随最右端：用户自己滚走之后就不再抢他的位置。 */
+    let followEnd = true;
+    /** 我们最近一次程序写入的 scrollLeft，用来区分「谁在滚」。 */
+    let lastWrite = -1;
 
     function apply(target, count, options) {
       column = target && target.column ? target.column : null;
@@ -336,19 +363,13 @@ DSHC.paged = (() => {
           restore();
           return false;
         }
-        // 进横向/翻页时停在纸带最右端（最新内容），和竖向落底一致。
-        page = Math.max(0, pages - 1);
-        if (host) host.scrollLeft = maxLeft();
-        if (wakeRaf) cancelAnimationFrame(wakeRaf);
-        wakeRaf = requestAnimationFrame(() => {
-          wakeRaf = 0;
-          if (!active || !host) return;
-          host.scrollLeft = maxScroll();
-          page = currentPage();
-          onChange();
-        });
         active = true;
+        followEnd = true;
+        lastWrite = -1;
         bind();
+        // 进横向/翻页时停在纸带最右端（最新内容），和竖向落底一致。
+        // 纸带宽度要等样式生效后才算得准，所以按帧重试几次。
+        snapToEnd(8);
         onChange();
         return true;
       } catch (error) {
@@ -367,12 +388,15 @@ DSHC.paged = (() => {
         restore();
         return;
       }
-      // 贴边时跟随最新内容，否则守住当前页。
-      goTo(wasEnd ? pages - 1 : clampPage(keep));
+      // 贴边时跟随最新内容，否则守住当前页；两种情况都不带动画。
+      if (wasEnd) snapToEnd(2);
+      else goTo(clampPage(keep), { smooth: false });
     }
 
     function restore() {
       active = false;
+      followEnd = true;
+      lastWrite = -1;
       unbind();
       if (column) adapter.resetEl(column);
       if (host) adapter.resetEl(host);

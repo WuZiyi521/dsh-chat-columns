@@ -89,6 +89,18 @@ DSHC.paged = (() => {
       });
       adapter.setAttr(column, 'data-dshc-paged', '');
 
+      // 估计的列数会偏（估多了最右端多出空白列，估少了差一列）。
+      // 用「最后一条消息的右边缘」反推**实际用掉几列**，再按实际宽度重设一次。
+      const used = measureUsedCols();
+      if (used !== totalCols) {
+        totalCols = used;
+        adapter.setStyles(column, {
+          'column-count': String(totalCols),
+          width: totalCols * colW + (totalCols - 1) * GAP + 'px'
+        });
+        recalcPages();
+      }
+
       host = adapter.layoutParent(column, scroller) || column.parentElement;
       if (host) {
         adapter.setAttr(host, 'data-dshc-paged-host', '');
@@ -126,6 +138,25 @@ DSHC.paged = (() => {
       if (total > 0) return total;
       // 兜底：一条消息都读不到时，按单列量一次（会打断滚动位置，只在异常路径用）
       return column.getBoundingClientRect().height || 0;
+    }
+
+    /**
+     * 实际用掉几列：看所有消息里最靠右的那条，它的右边缘落在第几列。
+     * 比「按高度估算」可靠 —— 估多会多出空白列，估少会差一列。
+     */
+    function measureUsedCols() {
+      const items = adapter.getItems(column);
+      const base = column.getBoundingClientRect().left;
+      let right = 0;
+      for (let i = 0; i < items.length; i += 1) {
+        const el = items[i].el;
+        if (!el || !el.isConnected) continue;
+        const rect = el.getBoundingClientRect();
+        if (!(rect.height > 0 || rect.width > 0)) continue;
+        right = Math.max(right, rect.right - base);
+      }
+      if (!(right > 0)) return Math.max(1, totalCols);
+      return Math.max(1, Math.ceil((right + GAP) / step));
     }
 
     function pageWidth() {

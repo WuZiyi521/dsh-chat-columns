@@ -89,7 +89,8 @@
 }
 
 #dshc-root .dshc-ctl-mark {
-  font-size: 9px;
+  font-size: 10px;
+  letter-spacing: 0;
   line-height: 1;
   letter-spacing: 0.04em;
   color: var(--dshc-text-3);

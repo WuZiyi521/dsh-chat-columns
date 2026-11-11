@@ -325,7 +325,7 @@ DSHC.controller = (() => {
       );
       toggle.setAttribute('aria-label', '多列阅读设置：' + info.label);
       iconBox.replaceChildren(svgIcon(info.icon));
-      mark.textContent = info.mark;
+      mark.textContent = info.label;
       sub.textContent = mode === 'native' ? '单列' : (current.resolved || 1) + ' 列';
 
       for (const button of modeButtons) {
@@ -408,7 +408,7 @@ DSHC.controller = (() => {
       if (nextAnchored !== anchored) {
         anchored = nextAnchored;
         const info = MODES.find((item) => item.id === ((lastView && lastView.mode) || 'native')) || MODES[0];
-        mark.textContent = anchored ? info.label : info.mark;
+        mark.textContent = info.label;
       }
 
       if (bar) {

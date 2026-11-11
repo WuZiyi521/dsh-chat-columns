@@ -667,6 +667,52 @@ DSHC.adapter = (() => {
     return stop;
   }
 
+  /* ------------------------------------------- 正文列被替换（切会话）的观察 */
+
+  /**
+   * 切会话时宿主会把正文列整块换掉。插件没有观察者时，只能等用户点一下才重扫
+   * ——「卡在原生视图、点一下才切换」就是这么来的。
+   *
+   * 新列出现时**同步**回调，调用方要在同一个任务里把它盖住，否则浏览器可能先画一帧原生排版。
+   * 消息行内部的嵌套 flow（分组卡片）不算会话正文列。
+   *
+   * @param {(column: Element|null) => void} callback
+   * @returns {() => void} 停止观察
+   */
+  function watchColumns(callback) {
+    if (!document.body || typeof MutationObserver !== 'function') return function stop() {};
+    let debounce = 0;
+    const isColumn = (el) => !!el && el.nodeType === 1 && el.matches(HOST.column) && !el.closest(HOST.item);
+    const scheduleCheck = () => {
+      if (debounce) return;
+      debounce = setTimeout(() => {
+        debounce = 0;
+        const found = resolve();
+        callback(found.column);
+      }, 60);
+    };
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes || []) {
+          if (node.nodeType !== 1) continue;
+          if (isColumn(node)) {
+            callback(node);
+            return;
+          }
+          if (node.querySelector && node.querySelector(HOST.column)) {
+            scheduleCheck();
+            return;
+          }
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      if (debounce) clearTimeout(debounce);
+      observer.disconnect();
+    };
+  }
+
   return {
     HOST,
     MARK,
@@ -702,6 +748,7 @@ DSHC.adapter = (() => {
     flowRowAttrs,
     fitContent,
     unfitContent,
-    watchForScroller
+    watchForScroller,
+    watchColumns
   };
 })();

@@ -57,6 +57,7 @@ DSHC.app = (() => {
   let resizeRaf = 0;
   let resolveTimer = 0;
   let startupWatch = null;
+  let columnWatch = null;
   let sessionKey = '';
 
   /* ----------------------------------------------------------- 设置存取 */
@@ -705,6 +706,25 @@ DSHC.app = (() => {
     // 插件先于会话渲染时等滚动容器出现（一次性观察，不是常驻全页观察器）。
     startupWatch = DSHC.adapter.watchForScroller(() => scheduleResolve(true));
 
+    // 切会话时正文列会被整块换掉。必须在同一帧盖住新列，否则会先画出一帧原生排版。
+    columnWatch = DSHC.adapter.watchColumns((column) => {
+      if (!mounted || disposed) return;
+      if (column && column !== target.column) {
+        if (state.mode !== 'native') DSHC.adapter.setStyle(column, 'visibility', 'hidden');
+        if (revealTimer) clearTimeout(revealTimer);
+        revealTimer = setTimeout(() => {
+          revealTimer = 0;
+          revealNow();
+        }, 500);
+        setTimeout(() => {
+          if (mounted && !disposed) resolve(true);
+        }, 0);
+        return;
+      }
+      // 列没变就别重扫：我们自己的副本也会触发 mutation，重扫会自激。
+      if (!target.column || !target.column.isConnected) scheduleResolve(true);
+    });
+
     startExpose();
     render();
     resolve(true);
@@ -737,6 +757,12 @@ DSHC.app = (() => {
     resizeObserver = null;
     if (startupWatch) startupWatch();
     startupWatch = null;
+    if (columnWatch) columnWatch();
+    columnWatch = null;
+    if (revealTimer) {
+      clearTimeout(revealTimer);
+      revealTimer = 0;
+    }
     if (mobileMq && mobileListener) {
       if (typeof mobileMq.removeEventListener === 'function') mobileMq.removeEventListener('change', mobileListener);
       else if (typeof mobileMq.removeListener === 'function') mobileMq.removeListener(mobileListener);

@@ -353,7 +353,13 @@ DSHC.controller = (() => {
         (mode === 'seamless' && next && next.variant && next.variant !== 'vertical') ||
         (mode !== 'seamless' && mode !== 'mirror');
       for (const button of implButtons) {
-        button.setAttribute('aria-pressed', String(button.getAttribute('data-impl') === (next && next.impl ? next.impl : 'ghost')));
+        const value = button.getAttribute('data-impl');
+        button.setAttribute('aria-pressed', String(value === (next && next.impl ? next.impl : 'ghost')));
+        // 交互版暂不可用：置灰并把原因写在 title 里（不要让它看起来能用）
+        const blocked = value === 'native' && next && next.implBlocked;
+        button.disabled = !!blocked;
+        if (blocked && next.implNote) button.title = next.implNote;
+        else button.removeAttribute('title');
       }
       // 每页列数只对「翻页」有意义：横向是线性横移，竖向根本不按页走。
       stepGroup.hidden = mode !== 'seamless' || current.variant !== 'paged';

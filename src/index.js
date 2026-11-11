@@ -17,6 +17,16 @@ DSHC.app = (() => {
   const VARIANTS = ['vertical', 'horizontal', 'paged'];
   const STEPS = ['screen', '1', '2', '3'];
   const DEFAULT_AUTO = { newspaper: false, seamless: true, mirror: true };
+  /**
+   * 交互版（Native）暂时不可用。
+   * 宿主渲染器只在「注册时声明了子槽」的情况下才发 renderSlot：
+   *   dsh-client-ui-renderer/lib/client.js: `if (entry.children !== void 0) kit.renderSlot = …`
+   * 而 conversation.chat.node 已被 chat 包声明，别人再声明会抛 already declared。
+   * 结果：影子注册的 flow 拿不到 renderSlot → 组件抛错 → slots 把我们的实现退休 →
+   * 静默退回宿主单列渲染。宿主放行后把 BLOCKED 改成 false 即可复活。
+   */
+  const NATIVE_BLOCKED = true;
+  const NATIVE_BLOCKED_NOTE = '交互版暂不可用：宿主的影子 flow 拿不到 renderSlot（待宿主放行）';
 
   const state = {
     mode: 'native',
@@ -139,6 +149,8 @@ DSHC.app = (() => {
       autoLoad: autoFor(state.mode),
       variant: state.variant,
       impl: state.impl,
+      implBlocked: NATIVE_BLOCKED,
+      implNote: NATIVE_BLOCKED_NOTE,
       pageStep: state.pageStep,
       pageInfo: state.mode === 'seamless' && state.variant !== 'vertical' && paged ? paged.diagnose() : null,
       mobile: isMobile(),
@@ -590,6 +602,11 @@ DSHC.app = (() => {
     const next = String(value) === 'native' ? 'native' : 'ghost';
     if (next === state.impl) return;
     if (next === 'native') {
+      if (NATIVE_BLOCKED) {
+        state.prefNote = NATIVE_BLOCKED_NOTE;
+        render();
+        return;
+      }
       const ok = DSHC.native && DSHC.native.install(pluginCtx);
       if (!ok) {
         const detail = DSHC.native ? DSHC.native.diagnose().lastError : 'native 模块缺失';

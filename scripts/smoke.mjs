@@ -671,25 +671,30 @@ step('竖向无缝（轻量版）：连续堆叠 + 边界副本 + 只读副本�
   assert.equal(data.tallOverflow, 'auto');
 });
 
-step('交互版（Native）：没有槽位服务时安全降级，不动用户读法', () => {
+step('交互版：暂时禁用（待宿主放行 renderSlot），且不动用户读法', () => {
   const data = read(`(() => {
     const before = window.__dshc.getState().mode;
     window.__dshc.setImpl('native');
-    const after = window.__dshc.getState().mode;
+    const state = window.__dshc.getState();
     const diag = window.__dshc.diagnose().native;
-    window.__dshc.setImpl('ghost');
     return {
       before,
-      after,
+      after: state.mode,
+      impl: state.impl,
+      blocked: state.implBlocked,
+      note: state.prefNote || '',
       installed: diag ? diag.installed : null,
-      priority: diag ? diag.priority : null,
-      lastError: diag ? diag.lastError : null
+      priority: diag ? diag.priority : null
     };
   })()`);
-  assert.equal(data.installed, false, '没有 ctx.slots 时不得假装装上了');
-  assert.equal(data.priority, -1, '覆盖宿主的 priority 必须是 -1（宿主是 0）');
-  assert.ok(String(data.lastError).indexOf('slots') >= 0, '降级原因要能说明是缺 slots');
-  assert.equal(data.after, data.before, '装不上时不得改动用户原来的读法');
+  assert.equal(data.blocked, true, '交互版当前应标记为不可用');
+  assert.equal(data.installed, false, '被禁用时不得注册槽位');
+  assert.equal(data.impl, 'ghost', '点不动就该保持轻量版');
+  assert.equal(data.after, data.before, '不得改动用户原来的读法');
+  assert.ok(
+    String(data.note).indexOf('renderSlot') >= 0,
+    '要明确告诉用户是 renderSlot 的问题：' + data.note
+  );
 });
 
 step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', () => {

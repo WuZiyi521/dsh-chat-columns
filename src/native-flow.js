@@ -30,6 +30,8 @@ DSHC.native = (() => {
   let React = null;
   let lastError = '';
   let renders = 0;
+  /** 运行时诊断（给 __dshc.diagnose().native 看）。 */
+  const stats = { H: 0, cols: 0, columnWidth: 0, keys: 0, measured: 0, total: 0, scroll: 0, views: 0, planMax: 0, mode: '' };
 
   function safeRequire(name) {
     try {
@@ -68,7 +70,7 @@ DSHC.native = (() => {
 
     /** 一条消息的一个视图：自己订阅 keyed source，所以流式更新是局部的。 */
     function NodeView(props) {
-      const { nodeKey, nodes, renderSlot, shared, registerRef } = props;
+      const { nodeKey, nodes, renderSlot, shared, registerRef, width } = props;
       const source = react.useMemo(() => nodes.source(nodeKey), [nodes, nodeKey]);
       const node = useSource(source);
       const owner = react.useMemo(
@@ -88,7 +90,7 @@ DSHC.native = (() => {
       const attrs = Object.assign({ 'data-dshc-native-row': '' }, DSHC.adapter.flowRowAttrs(node));
       return h(
         'div',
-        { ref, ...attrs, style: { position: 'absolute', left: '0px', top: '0px', width: '100%' } },
+        { ref, ...attrs, style: { position: 'absolute', left: '0px', top: '0px', width: width + 'px' } },
         renderSlot(SLOT_NODE, owner, {
           entryKey: node.kind,
           hookContext,
@@ -162,6 +164,8 @@ DSHC.native = (() => {
         heights.current = next;
         startsRef.current = starts;
         totalRef.current = y;
+        stats.measured = next.size;
+        stats.total = Math.round(y);
       }, [keys]);
 
       /** 依据当前滚动量，算出每条消息需要几个视图（0 表示不在可见范围）。 */
@@ -239,6 +243,16 @@ DSHC.native = (() => {
         if (!geoms || !scroller) return;
         sRef.current = Math.min(maxScrollOf(), Math.max(0, scroller.scrollTop));
         const next = planOf();
+        let viewsWanted = 0;
+        let planMax = 0;
+        for (const key of Object.keys(next)) {
+          viewsWanted += next[key];
+          if (next[key] > planMax) planMax = next[key];
+        }
+        stats.scroll = Math.round(sRef.current);
+        stats.views = viewsWanted;
+        stats.planMax = planMax;
+        stats.keys = keys.length;
         setExtra((prev) => {
           let changed = false;
           const keyset = new Set(Object.keys(next).concat(Object.keys(prev)));
@@ -264,6 +278,9 @@ DSHC.native = (() => {
           return undefined;
         }
         geomRef.current = geom;
+        stats.H = geom.H;
+        stats.cols = geom.cols;
+        stats.columnWidth = geom.columnWidth;
         requestAnimationFrame(() => {
           setGeomState(geom);
           recompute();
@@ -303,6 +320,38 @@ DSHC.native = (() => {
         });
       }, [keys, recompute, tick]);
 
+      // 几何（列宽）真正落到 DOM 之后再量一次：首帧宽度是 0，量出来的是废数。
+      useLayoutEffect(() => {
+        if (!geomState) return undefined;
+        const raf = requestAnimationFrame(() => {
+          recompute();
+          tick();
+        });
+        return () => cancelAnimationFrame(raf);
+      }, [geomState, recompute, tick]);
+
+      // 内容高度会变（流式、图片、折叠）：盯住每条消息的第一个视图。
+      useLayoutEffect(() => {
+        if (!geomState || typeof ResizeObserver !== 'function') return undefined;
+        let raf = 0;
+        const observer = new ResizeObserver(() => {
+          if (raf) return;
+          raf = requestAnimationFrame(() => {
+            raf = 0;
+            recompute();
+            tick();
+          });
+        });
+        for (const key of keys) {
+          const el = viewRefs.current.get(key);
+          if (el) observer.observe(el);
+        }
+        return () => {
+          if (raf) cancelAnimationFrame(raf);
+          observer.disconnect();
+        };
+      }, [geomState, keys, recompute, tick]);
+
       const geom = geomState || geomRef.current;
       const layerHeight = geom ? geom.H : 0;
       const spacer = Math.max(0, maxScrollOf());
@@ -322,9 +371,16 @@ DSHC.native = (() => {
                   if (el) elRefs.current.set(id, el);
                   else elRefs.current.delete(id);
                 },
-                style: { position: 'absolute', left: '0px', top: '0px', width: '100%', willChange: 'transform' }
+                style: { position: 'absolute', left: '0px', top: '0px', width: (geomState ? geomState.columnWidth : 0) + 'px', willChange: 'transform' }
               },
-              h(NodeView, { nodeKey: key, nodes, renderSlot, shared, registerRef })
+              h(NodeView, {
+                nodeKey: key,
+                nodes,
+                renderSlot,
+                shared,
+                registerRef,
+                width: geomState ? geomState.columnWidth : 0
+              })
             )
           );
         }
@@ -382,7 +438,23 @@ DSHC.native = (() => {
   }
 
   function diagnose() {
-    return { installed, priority: PRIORITY, react: !!React, renders, lastError };
+    return {
+      installed,
+      priority: PRIORITY,
+      react: !!React,
+      renders,
+      lastError,
+      // 布局现场：H / 列数 / 列宽 / 量到几条 / 内容总高 / 滚动量 / 当前视图数
+      H: stats.H,
+      cols: stats.cols,
+      columnWidth: stats.columnWidth,
+      keys: stats.keys,
+      measured: stats.measured,
+      total: stats.total,
+      scroll: stats.scroll,
+      views: stats.views,
+      planMax: stats.planMax
+    };
   }
 
   return { install, uninstall, diagnose, isInstalled: () => installed };

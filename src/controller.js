@@ -352,7 +352,8 @@ DSHC.controller = (() => {
       for (const button of implButtons) {
         button.setAttribute('aria-pressed', String(button.getAttribute('data-impl') === (next && next.impl ? next.impl : 'ghost')));
       }
-      stepGroup.hidden = mode !== 'seamless' || current.variant === 'vertical';
+      // 每页列数只对「翻页」有意义：横向是线性横移，竖向根本不按页走。
+      stepGroup.hidden = mode !== 'seamless' || current.variant !== 'paged';
       for (const button of stepButtons) {
         const value = button.getAttribute('data-step');
         button.setAttribute('aria-pressed', value === String(current.pageStep) ? 'true' : 'false');

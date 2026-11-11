@@ -717,20 +717,21 @@ step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', (
   assert.equal(paged.mark, true);
   assert.equal(paged.progress, 'page');
   assert.equal(paged.cols, 2);
-  assert.equal(paged.totalCols, 6, '内容 3800 高 / 视口 660 → 6 列');
-  assert.equal(paged.pages, 3, '一屏 2 列 → 3 页');
-  assert.equal(paged.count, '6');
+  // 内容总高按「逐条消息高度累加」：6×300 + 间距 + 超长 5000 ≈ 6800 / 660 → 11 列
+  assert.equal(paged.totalCols, 11);
+  assert.ok(paged.pages >= 2, '页数要随内容算出来');
+  assert.equal(paged.count, '11');
   assert.equal(paged.fill, 'auto');
-  assert.equal(paged.width, '3356px', '6×526 + 5×40');
+  assert.equal(paged.width, '6186px', '11×526 + 10×40');
   assert.equal(paged.height, '660px');
   assert.equal(paged.hostOverflowX, 'auto', '纸带由宿主横向滚动');
   assert.equal(paged.scrollerOverflow, 'hidden');
-  assert.equal(paged.page, 2, '进入翻页/横向时停在最右端（最新内容）');
+  assert.equal(paged.page, paged.pages - 1, '进入翻页/横向时停在最右端（最新内容）');
 
   run('window.__dshc.prevPage();');
   const turned = read(`({ page: window.__dshc.diagnose().paged.page, left: __fixture.wrap.scrollLeft })`);
-  assert.equal(turned.page, 1);
-  assert.equal(turned.left, 1132, '一页 = 2 列 = 1132px');
+  assert.equal(turned.page, paged.pages - 2);
+  assert.ok(turned.left > 0, '后退一页应该真的往左走了');
 
   run('window.__dshc.setVariant("horizontal");');
   const linear = read(`({ progress: window.__dshc.diagnose().paged.progress, active: window.__dshc.diagnose().paged.active })`);

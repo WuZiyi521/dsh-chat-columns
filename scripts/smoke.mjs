@@ -561,8 +561,8 @@ step('报纸模式：列样式与标记就位', () => {
     const c = __fixture.column;
     return {
       mark: c.hasAttribute('data-dshc-a'),
-      count: c.style.getPropertyValue('column-count'),
       display: c.style.getPropertyValue('display'),
+      count: c.style.getPropertyValue('column-count'),
       fill: c.style.getPropertyValue('column-fill'),
       widthVar: c.style.getPropertyValue('--dsh-chat-content-width'),
       items: __fixture.rows.filter((row) => row.hasAttribute('data-dshc-item')).length,
@@ -704,6 +704,7 @@ step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', (
       totalCols: diag.totalCols,
       pages: diag.pages,
       page: diag.page,
+      display: c.style.getPropertyValue('display'),
       count: c.style.getPropertyValue('column-count'),
       fill: c.style.getPropertyValue('column-fill'),
       width: c.style.getPropertyValue('width'),
@@ -720,6 +721,7 @@ step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', (
   // 内容总高按「逐条消息高度累加」：6×300 + 间距 + 超长 5000 ≈ 6800 / 660 → 11 列
   assert.equal(paged.totalCols, 11);
   assert.ok(paged.pages >= 2, '页数要随内容算出来');
+  assert.equal(paged.display, 'block', '多列对 flex 容器无效，必须先改回 block');
   assert.equal(paged.count, '11');
   assert.equal(paged.fill, 'auto');
   assert.equal(paged.width, '6186px', '11×526 + 10×40');

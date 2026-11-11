@@ -68,8 +68,11 @@ DSHC.paged = (() => {
       stepCols = Math.max(1, Math.min(cols, Number(wantedStep) || cols));
       recalcPages();
 
-      // 2) 纸带：所有列横向排开，交给宿主横向滚动
+      // 2) 纸带：所有列横向排开，交给宿主横向滚动。
+      //    注意 display 必须是 block：宿主正文列是 flex，CSS 多列对 flex 容器无效
+      //    （漏了这句就会退化成"一列、拉得很长"）。
       adapter.setStyles(column, {
+        display: 'block',
         'column-count': String(totalCols),
         'column-fill': 'auto',
         'column-gap': GAP + 'px',
@@ -77,37 +80,14 @@ DSHC.paged = (() => {
         height: H + 'px',
         width: totalCols * colW + (totalCols - 1) * GAP + 'px',
         'max-width': 'none',
+        margin: '0',
+        padding: '0',
+        'box-sizing': 'border-box',
         overflow: 'visible',
-        transform: 'none'
+        transform: 'none',
+        [adapter.HOST.contentWidth]: '100%'
       });
       adapter.setAttr(column, 'data-dshc-paged', '');
-
-      // 2) 纸带：所有列横向排开，交给宿主横向滚动
-      adapter.setStyles(column, {
-        'column-count': String(totalCols),
-        'column-fill': 'auto',
-        'column-gap': GAP + 'px',
-        'column-width': 'auto',
-        height: H + 'px',
-        width: totalCols * colW + (totalCols - 1) * GAP + 'px',
-        'max-width': 'none',
-        overflow: 'visible',
-        transform: 'none'
-      });
-      adapter.setAttr(column, 'data-dshc-paged', '');
-
-      // 按高度估算的列数可能少一列（多列里块间距/断行会多占一点高度），
-      // 浏览器把内容溢出到了纸带宽度之外 —— 补上，否则最右端永远差一列。
-      const tapeWidth = totalCols * colW + (totalCols - 1) * GAP;
-      const overflowWidth = Number(column.scrollWidth) || 0;
-      if (overflowWidth > tapeWidth + 1) {
-        totalCols += Math.max(1, Math.ceil((overflowWidth - tapeWidth) / step));
-        adapter.setStyles(column, {
-          'column-count': String(totalCols),
-          width: totalCols * colW + (totalCols - 1) * GAP + 'px'
-        });
-        recalcPages();
-      }
 
       host = adapter.layoutParent(column, scroller) || column.parentElement;
       if (host) {

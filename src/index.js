@@ -299,7 +299,8 @@ DSHC.app = (() => {
         DSHC.adapter.setAttr(target.scroller, 'data-dshc-hide-scrollbar', '');
         mirror.setColumns(state.resolved, items);
         // 复制模式：每栏都是完整副本，进入时让所有栏停在同一阅读位置。
-        mirror.apply(target, state.resolved, items, geometry(), anchor);
+        // 不传锚点：进入复制模式直接落到各栏底部（最新内容）。
+        mirror.apply(target, state.resolved, items, geometry(), null);
         mirror.setMeta({ history: history ? history.snapshot() : null });
       }
     }

@@ -53,7 +53,8 @@ DSHC.flow = (() => {
     let caps = [];
 
     let scrollRaf = 0;
-    /** 「落到底」的补帧；退出时要取消，否则会留定时器。 */
+    /** 「落到底」的补帧令牌；退出/新一次补帧都会让它失效，避免留定时器。 */
+    let settleToken = 0;
     let settleRaf = 0;
     let repackTimer = 0;
     let resizeTimer = 0;
@@ -408,6 +409,26 @@ DSHC.flow = (() => {
       stats.clones = clones;
     }
 
+    /**
+     * 连补几帧落到底：字体、图片、圆角分组会在第一帧之后才把高度撑开，
+     * 一次对齐必然「差一点」。每帧复量 + 重新定位，直到稳定。
+     */
+    function settleToEnd(frames) {
+      const token = (settleToken += 1);
+      let left = Math.max(1, frames);
+      const step = () => {
+        settleRaf = 0;
+        if (!active || token !== settleToken) return;
+        measureAll();
+        place();
+        setScroll(maxScroll());
+        left -= 1;
+        if (left > 0) settleRaf = requestAnimationFrame(step);
+      };
+      if (settleRaf) cancelAnimationFrame(settleRaf);
+      settleRaf = requestAnimationFrame(step);
+    }
+
     function setScroll(value) {
       if (!scroller) return;
       const next = Math.min(maxScroll(), Math.max(0, value));
@@ -582,6 +603,7 @@ DSHC.flow = (() => {
       itemObserver = null;
       if (scrollRaf) cancelAnimationFrame(scrollRaf);
       scrollRaf = 0;
+      settleToken += 1;
       if (settleRaf) cancelAnimationFrame(settleRaf);
       settleRaf = 0;
       if (repackTimer) clearTimeout(repackTimer);
@@ -621,14 +643,7 @@ DSHC.flow = (() => {
         bind();
         // 进入竖向无缝时停在会话底部（最新内容），和宿主原生的落点一致。
         setScroll(maxScroll());
-        if (settleRaf) cancelAnimationFrame(settleRaf);
-        settleRaf = requestAnimationFrame(() => {
-          settleRaf = 0;
-          if (!active) return;
-          measureAll();
-          place();
-          setScroll(maxScroll());
-        });
+        settleToEnd(5);
       } catch (error) {
         console.error('[dsh-chat-columns] 连续流初始化失败，已退回原生', error);
         restore();

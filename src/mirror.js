@@ -203,8 +203,19 @@ DSHC.mirror = (() => {
 
     /** 进入时让所有栏都停在同一阅读位置。 */
     function alignAll(anchor) {
-      if (!anchor) return;
       suppress = true;
+      if (!anchor) {
+        // 没有锚点（刚进复制模式）→ 每栏都落到最新内容，和宿主原生落点一致。
+        try {
+          for (let i = 0; i < cols.length; i += 1) {
+            cols[i].body.scrollTop = cols[i].body.scrollHeight;
+            cols[i].armed = cols[i].body.scrollTop > REARM;
+          }
+        } finally {
+          suppress = false;
+        }
+        return;
+      }
       try {
         for (let i = 0; i < cols.length; i += 1) {
           scrollToAnchor(i, anchor.id, anchor.offset);

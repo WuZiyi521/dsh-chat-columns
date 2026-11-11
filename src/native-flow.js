@@ -230,6 +230,21 @@ DSHC.native = (() => {
         }
       }, [keys]);
 
+      /** 重算高度/位置；原本贴底的话跟着新内容走（新消息不该停在下半屏）。 */
+      const refresh = useCallback(() => {
+        const scroller = scrollerOf();
+        const geom = geomRef.current;
+        const before = geom ? Math.max(0, totalRef.current - geom.cols * geom.H) : 0;
+        const follow = scroller ? before - scroller.scrollTop < 8 : false;
+        recompute();
+        tick();
+        if (follow && scroller && geomRef.current) {
+          const max = Math.max(0, totalRef.current - geomRef.current.cols * geomRef.current.H);
+          if (Math.abs(scroller.scrollTop - max) > 0.5) scroller.scrollTop = max;
+          tick();
+        }
+      }, [recompute, scrollerOf, tick]);
+
       const maxScrollOf = useCallback(() => {
         const geom = geomRef.current;
         if (!geom) return 0;
@@ -314,21 +329,15 @@ DSHC.native = (() => {
 
       // 消息集合变化（流式/加载更早）后重量一次。
       useLayoutEffect(() => {
-        requestAnimationFrame(() => {
-          recompute();
-          tick();
-        });
-      }, [keys, recompute, tick]);
+        requestAnimationFrame(refresh);
+      }, [keys, refresh]);
 
       // 几何（列宽）真正落到 DOM 之后再量一次：首帧宽度是 0，量出来的是废数。
       useLayoutEffect(() => {
         if (!geomState) return undefined;
-        const raf = requestAnimationFrame(() => {
-          recompute();
-          tick();
-        });
+        const raf = requestAnimationFrame(refresh);
         return () => cancelAnimationFrame(raf);
-      }, [geomState, recompute, tick]);
+      }, [geomState, refresh]);
 
       // 内容高度会变（流式、图片、折叠）：盯住每条消息的第一个视图。
       useLayoutEffect(() => {
@@ -338,8 +347,7 @@ DSHC.native = (() => {
           if (raf) return;
           raf = requestAnimationFrame(() => {
             raf = 0;
-            recompute();
-            tick();
+            refresh();
           });
         });
         for (const key of keys) {
@@ -350,7 +358,7 @@ DSHC.native = (() => {
           if (raf) cancelAnimationFrame(raf);
           observer.disconnect();
         };
-      }, [geomState, keys, recompute, tick]);
+      }, [geomState, keys, refresh]);
 
       const geom = geomState || geomRef.current;
       const layerHeight = geom ? geom.H : 0;

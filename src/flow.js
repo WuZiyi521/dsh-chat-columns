@@ -464,11 +464,18 @@ DSHC.flow = (() => {
       }
     }
 
+    /** 是否贴着底部（新消息到来时要跟着走，宿主原生也是这个行为）。 */
+    function atBottom() {
+      if (!scroller) return false;
+      return maxScroll() - scroller.scrollTop < 8;
+    }
+
     /** 消息集合变化（流式、折叠、加载更早）后重排。 */
     function update(items, dirty) {
       if (!active) return;
       applying = true;
       try {
+        const follow = atBottom();
         const anchor = captureAnchor();
         syncItems(items, dirty);
         adapter.fitContent(column);
@@ -486,7 +493,9 @@ DSHC.flow = (() => {
             rec.clones[k] = fresh;
           }
         }
-        if (anchor && anchor.rec.el && anchor.rec.el.isConnected) restoreAnchor(anchor);
+        // 贴底时跟随最新内容；否则守住原来的阅读位置。
+        if (follow) setScroll(maxScroll());
+        else if (anchor && anchor.rec.el && anchor.rec.el.isConnected) restoreAnchor(anchor);
         else projectAll();
       } catch (error) {
         console.error('[dsh-chat-columns] 连续流重排失败', error);

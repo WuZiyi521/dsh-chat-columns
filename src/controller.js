@@ -348,7 +348,10 @@ DSHC.controller = (() => {
 
       autoGroup.hidden = mode === 'native';
       variantGroup.hidden = mode !== 'seamless';
-      implGroup.hidden = mode !== 'seamless' || (next && next.variant && next.variant !== 'vertical');
+      // 交互版对「无缝竖向」和「复制」都适用；横向/翻页没有第二套实现。
+      implGroup.hidden =
+        (mode === 'seamless' && next && next.variant && next.variant !== 'vertical') ||
+        (mode !== 'seamless' && mode !== 'mirror');
       for (const button of implButtons) {
         button.setAttribute('aria-pressed', String(button.getAttribute('data-impl') === (next && next.impl ? next.impl : 'ghost')));
       }

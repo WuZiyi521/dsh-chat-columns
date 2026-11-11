@@ -25,6 +25,29 @@ DSHC.native = (() => {
   const MIN_VIEWPORT = 160;
   const GAP = 12;
 
+  /** 槽位只有一个，竖向/复制共用它，用这个外部 store 决定渲哪套布局。 */
+  const layoutStore = { layout: 'seamless', columns: 2 };
+  const layoutListeners = new Set();
+  function emitLayout() {
+    for (const fn of layoutListeners) fn();
+  }
+  function subscribeLayout(fn) {
+    layoutListeners.add(fn);
+    return () => layoutListeners.delete(fn);
+  }
+  function setLayout(next) {
+    const value = next === 'mirror' ? 'mirror' : 'seamless';
+    if (value === layoutStore.layout) return;
+    layoutStore.layout = value;
+    emitLayout();
+  }
+  function setColumns(count) {
+    const value = Math.max(1, Math.min(3, Number(count) || 1));
+    if (value === layoutStore.columns) return;
+    layoutStore.columns = value;
+    emitLayout();
+  }
+
   let installed = false;
   let teardown = null;
   let React = null;
@@ -99,7 +122,7 @@ DSHC.native = (() => {
       );
     }
 
-    function NativeFlow(props) {
+    function SeamlessFlow(props) {
       const { entries, renderSlot, useChat, cwd, openFile, openSkill, inspectCall, forkAt, loadImage, fileMentions } = props;
       renders += 1;
 
@@ -410,7 +433,34 @@ DSHC.native = (() => {
       );
     }
 
-    return NativeFlow;
+    /** 路由：竖向用连续流布局，复制用 N 栏布局；两者共用同一个槽位。 */
+    function NativeFlowRouter(props) {
+      const layout = react.useSyncExternalStore(subscribeLayout, () => layoutStore.layout, () => layoutStore.layout);
+      if (layout === 'mirror' && DSHC.nativeMirror) {
+        if (!mirrorComponent) mirrorComponent = DSHC.nativeMirror.make(react);
+        return react.createElement(mirrorComponent, {
+          renderSlot: props.renderSlot,
+          useChat: props.useChat,
+          columns: layoutStore.columns,
+          shared: {
+            owner: {
+              cwd: props.cwd,
+              openFile: props.openFile,
+              openSkill: props.openSkill,
+              inspectCall: props.inspectCall,
+              forkAt: props.forkAt,
+              loadImage: props.loadImage,
+              renderMessageImages: () => null,
+              fileMentions: props.fileMentions
+            }
+          }
+        });
+      }
+      return react.createElement(SeamlessFlow, props);
+    }
+
+    let mirrorComponent = null;
+    return NativeFlowRouter;
   }
 
   function install(ctx) {
@@ -465,5 +515,13 @@ DSHC.native = (() => {
     };
   }
 
-  return { install, uninstall, diagnose, isInstalled: () => installed };
+  return {
+    install,
+    uninstall,
+    diagnose,
+    setLayout,
+    setColumns,
+    getLayout: () => layoutStore.layout,
+    isInstalled: () => installed
+  };
 })();

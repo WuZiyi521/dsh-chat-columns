@@ -250,9 +250,12 @@ DSHC.app = (() => {
     const items = itemsFromIndex();
     let note = '';
 
-    // 交互版只在「无缝 + 竖向」里生效，其它视图一律把槽位还回宿主。
-    const keepNative = state.mode === 'seamless' && state.variant === 'vertical' && state.impl === 'native';
-    if (!keepNative && DSHC.native && DSHC.native.isInstalled()) DSHC.native.uninstall();
+    // 交互版：竖向无缝 + 复制两个视图都走它，其它视图把槽位还回宿主。
+    const nativeSeamless = state.mode === 'seamless' && state.variant === 'vertical' && state.impl === 'native';
+    const nativeMirror = state.mode === 'mirror' && state.impl === 'native';
+    if (!nativeSeamless && !nativeMirror && DSHC.native && DSHC.native.isInstalled()) DSHC.native.uninstall();
+    if (nativeSeamless && DSHC.native) DSHC.native.setLayout('seamless');
+    if (nativeMirror && DSHC.native) DSHC.native.setLayout('mirror');
 
     if (state.mode === 'newspaper') {
       if (state.resolved < 2) {
@@ -286,12 +289,19 @@ DSHC.app = (() => {
         if (!ok) note = state.variant === 'vertical' ? '无缝模式初始化失败，已退回原生' : '横向/翻页无缝初始化失败，已退回原生';
       }
     } else if (state.mode === 'mirror') {
-      hideHostOlder(true);
-      DSHC.adapter.setAttr(target.scroller, 'data-dshc-hide-scrollbar', '');
-      mirror.setColumns(state.resolved, items);
-      // 复制模式：每栏都是完整副本，进入时让所有栏停在同一阅读位置。
-      mirror.apply(target, state.resolved, items, geometry(), anchor);
-      mirror.setMeta({ history: history ? history.snapshot() : null });
+      if (nativeMirror) {
+        // 交互版复制：每栏都是真组件，不克隆 DOM。
+        if (DSHC.native && !DSHC.native.isInstalled()) DSHC.native.install(pluginCtx);
+        if (DSHC.native) DSHC.native.setColumns(state.resolved);
+        note = '';
+      } else {
+        hideHostOlder(true);
+        DSHC.adapter.setAttr(target.scroller, 'data-dshc-hide-scrollbar', '');
+        mirror.setColumns(state.resolved, items);
+        // 复制模式：每栏都是完整副本，进入时让所有栏停在同一阅读位置。
+        mirror.apply(target, state.resolved, items, geometry(), anchor);
+        mirror.setMeta({ history: history ? history.snapshot() : null });
+      }
     }
 
     if (note) state.prefNote = note;
@@ -317,7 +327,7 @@ DSHC.app = (() => {
       else if (state.impl === 'ghost' && flow) flow.update(itemsFromIndex(), change.dirty);
       else seamless.update(itemsFromIndex(), change.dirty);
     } else if (state.mode === 'mirror') {
-      mirror.update(itemsFromIndex(), { history: history ? history.snapshot() : null }, change);
+      if (state.impl !== 'native') mirror.update(itemsFromIndex(), { history: history ? history.snapshot() : null }, change);
     }
 
     refreshHistory();
@@ -586,9 +596,7 @@ DSHC.app = (() => {
         render();
         return;
       }
-      // 交互版就住在「无缝 → 竖向」这个视图里：切换实现方式不该把用户踢回原生视图。
-      state.mode = 'seamless';
-      state.variant = 'vertical';
+      // 交互版适用于「无缝竖向」和「复制」：留在当前视图，不把用户踢走。
       writeSettings();
     } else if (DSHC.native) {
       DSHC.native.uninstall();

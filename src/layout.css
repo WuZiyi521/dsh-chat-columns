@@ -410,6 +410,43 @@
   display: none !important;
 }
 
+/* C-Native：交互版复制的 N 栏（每栏都是真组件，各栏独立滚动） */
+[data-dshc-native-mirror] {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+[data-dshc-native-mirror-col] {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  border-radius: 10px;
+}
+
+[data-dshc-native-mirror-head] {
+  flex: none;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.1));
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #6b6a63);
+}
+
+[data-dshc-native-mirror-body] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  container-type: inline-size;
+  overscroll-behavior: contain;
+}
+
 /* ================================================================= C 复制 */
 
 #dshc-root .dshc-view {

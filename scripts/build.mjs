@@ -23,6 +23,7 @@ const MODULES = [
   'seamless.js',
   'paged.js',
   'flow.js',
+  'native-mirror.js',
   'native-flow.js',
   'mirror.js',
   'controller.js',

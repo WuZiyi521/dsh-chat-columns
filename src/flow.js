@@ -480,6 +480,8 @@ DSHC.flow = (() => {
         syncItems(items, dirty);
         adapter.fitContent(column);
         place();
+        // 展开/折叠会渲染出新的装饰节点（分隔线、按钮等），它们会停在层的正常流里压住内容。
+        hideDecorations();
         observeItems();
         // 脏消息的副本要跟着换内容。
         for (const rec of records) {
@@ -544,7 +546,10 @@ DSHC.flow = (() => {
           for (const item of entries) {
             const rec = records.find((candidate) => candidate.el === item.target);
             if (!rec) continue;
-            const height = Math.round(item.contentRect.height * 100) / 100;
+            // 超高消息（思维链展开这类）被 max-height 限过，量到的是裁剪值。
+            // 先放开限高再量自然高，否则展开/收起之后尺寸永远停在旧值 → 错位。
+            adapter.setStyle(rec.el, 'max-height', '');
+            const height = Math.round(rec.el.getBoundingClientRect().height * 100) / 100;
             if (Math.abs(height - rec.height) > 0.5) {
               rec.height = height;
               rec.dirty = true;

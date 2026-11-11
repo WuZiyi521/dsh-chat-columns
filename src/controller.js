@@ -227,6 +227,8 @@ DSHC.controller = (() => {
     let open = false;
     /** 是否贴到了宿主右上角动作栏（决定按钮样式与角标文案）。 */
     let anchored = false;
+    /** 最近一次渲染用的状态（定位方式变化时要用它刷新角标文案）。 */
+    let lastView = null;
     let lastMode = '';
 
     function setOpen(next, focusToggle) {
@@ -307,6 +309,7 @@ DSHC.controller = (() => {
     }
 
     function render(next) {
+      lastView = next || lastView || null;
       const current = next || {};
       const mode = current.mode || 'native';
       const info = MODES.find((item) => item.id === mode) || MODES[0];
@@ -400,6 +403,13 @@ DSHC.controller = (() => {
       const bar = DSHC.adapter.toolbarAnchor ? DSHC.adapter.toolbarAnchor() : null;
       const TOGGLE_H = 30;
       const GAP = 8;
+
+      const nextAnchored = !!bar;
+      if (nextAnchored !== anchored) {
+        anchored = nextAnchored;
+        const info = MODES.find((item) => item.id === ((lastView && lastView.mode) || 'native')) || MODES[0];
+        mark.textContent = anchored ? info.label : info.mark;
+      }
 
       if (bar) {
         const top = Math.round(bar.top + (bar.height - TOGGLE_H) / 2);

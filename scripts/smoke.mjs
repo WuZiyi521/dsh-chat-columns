@@ -725,8 +725,9 @@ step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', (
   assert.equal(paged.height, '660px');
   assert.equal(paged.hostOverflowX, 'auto', '纸带由宿主横向滚动');
   assert.equal(paged.scrollerOverflow, 'hidden');
+  assert.equal(paged.page, 2, '进入翻页/横向时停在最右端（最新内容）');
 
-  run('window.__dshc.nextPage();');
+  run('window.__dshc.prevPage();');
   const turned = read(`({ page: window.__dshc.diagnose().paged.page, left: __fixture.wrap.scrollLeft })`);
   assert.equal(turned.page, 1);
   assert.equal(turned.left, 1132, '一页 = 2 列 = 1132px');

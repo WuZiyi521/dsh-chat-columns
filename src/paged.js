@@ -310,10 +310,15 @@ DSHC.paged = (() => {
       keyBound = false;
       if (scrollRaf) cancelAnimationFrame(scrollRaf);
       scrollRaf = 0;
+      if (wakeRaf) cancelAnimationFrame(wakeRaf);
+      wakeRaf = 0;
       acc = 0;
     }
 
     /* --------------------------------------------------------------- 应用 */
+
+    /** 进入后等一帧再对齐右端（纸带宽度要等样式生效后才算得准）。 */
+    let wakeRaf = 0;
 
     function apply(target, count, options) {
       column = target && target.column ? target.column : null;
@@ -331,8 +336,17 @@ DSHC.paged = (() => {
           restore();
           return false;
         }
-        page = 0;
-        if (host) host.scrollLeft = 0;
+        // 进横向/翻页时停在纸带最右端（最新内容），和竖向落底一致。
+        page = Math.max(0, pages - 1);
+        if (host) host.scrollLeft = maxLeft();
+        if (wakeRaf) cancelAnimationFrame(wakeRaf);
+        wakeRaf = requestAnimationFrame(() => {
+          wakeRaf = 0;
+          if (!active || !host) return;
+          host.scrollLeft = maxScroll();
+          page = currentPage();
+          onChange();
+        });
         active = true;
         bind();
         onChange();
@@ -347,12 +361,14 @@ DSHC.paged = (() => {
     /** 内容变化后重算纸带列数与页数（流式 / 加载更早）。 */
     function update() {
       if (!active) return;
+      const wasEnd = page >= pages - 1 || host.scrollLeft >= maxScroll() - 8;
       const keep = page;
       if (!applyShell()) {
         restore();
         return;
       }
-      goTo(clampPage(keep));
+      // 贴边时跟随最新内容，否则守住当前页。
+      goTo(wasEnd ? pages - 1 : clampPage(keep));
     }
 
     function restore() {

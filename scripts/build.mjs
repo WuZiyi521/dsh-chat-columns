@@ -23,6 +23,7 @@ const MODULES = [
   'seamless.js',
   'paged.js',
   'flow.js',
+  'native-flow.js',
   'mirror.js',
   'controller.js',
   'index.js'
@@ -57,7 +58,7 @@ const bundle = [
   '\t\texports.apply = (ctx) => { DSHC.app.start(ctx); };',
   '\t\texports.mount = () => DSHC.app.mount();',
   '\t\texports.unmount = () => DSHC.app.unmount();',
-  '\t\texports.inject = [];',
+  '\t\texports.inject = ["slots"];',
   '\t\treturn module.exports;',
   '\t}',
   '});',

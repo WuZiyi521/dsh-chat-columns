@@ -80,6 +80,7 @@ DSHC.controller = (() => {
     const onColumns = options.onColumns || function noop() {};
     const onAutoLoad = options.onAutoLoad || function noop() {};
     const onVariant = options.onVariant || function noop() {};
+    const onImpl = options.onImpl || function noop() {};
     const onPageStep = options.onPageStep || function noop() {};
     const onLoadEarlier = options.onLoadEarlier || function noop() {};
     const onRetry = options.onRetry || function noop() {};
@@ -178,6 +179,23 @@ DSHC.controller = (() => {
     });
     stepGroup.append(stepLabel, stepBox);
 
+    // 无缝竖向的两档实现：轻量版 / 交互版（阅读模型一致，差别是跨缝那份能否交互）
+    const implGroup = el('div', 'dshc-group', { 'data-role': 'impl-group' });
+    const implLabel = el('span', 'dshc-label', { id: 'dshc-label-impl' });
+    implLabel.textContent = '实现方式';
+    const implBox = el('div', 'dshc-seg', { role: 'group', 'aria-labelledby': 'dshc-label-impl', 'data-role': 'impls' });
+    const implValues = [
+      ['ghost', '轻量'],
+      ['native', '交互']
+    ];
+    const implButtons = implValues.map(([value, label]) => {
+      const button = el('button', null, { type: 'button', 'data-impl': value, 'aria-pressed': 'false' });
+      button.textContent = label;
+      implBox.appendChild(button);
+      return button;
+    });
+    implGroup.append(implLabel, implBox);
+
     const autoGroup = el('div', 'dshc-group', { 'data-role': 'auto-group' });
     const autoLabel = el('label', 'dshc-switch');
     const autoInput = el('input', null, { type: 'checkbox', 'data-role': 'auto' });
@@ -199,7 +217,7 @@ DSHC.controller = (() => {
     const note = el('div', 'dshc-note', { 'data-role': 'note' });
     note.hidden = true;
 
-    panel.append(head, modesGroup, colsGroup, variantGroup, stepGroup, autoGroup, status, actions, note);
+    panel.append(head, modesGroup, colsGroup, variantGroup, stepGroup, implGroup, autoGroup, status, actions, note);
     wrap.append(toggle, panel);
 
     // 顶部手动「加载更早」悬浮胶囊：报纸默认手动、无缝关闭自动加载时的唯一入口。
@@ -330,6 +348,10 @@ DSHC.controller = (() => {
 
       autoGroup.hidden = mode === 'native';
       variantGroup.hidden = mode !== 'seamless';
+      implGroup.hidden = mode !== 'seamless' || (next && next.variant && next.variant !== 'vertical');
+      for (const button of implButtons) {
+        button.setAttribute('aria-pressed', String(button.getAttribute('data-impl') === (next && next.impl ? next.impl : 'ghost')));
+      }
       stepGroup.hidden = mode !== 'seamless' || current.variant === 'vertical';
       for (const button of stepButtons) {
         const value = button.getAttribute('data-step');
@@ -398,6 +420,9 @@ DSHC.controller = (() => {
     }
     for (const button of stepButtons) {
       button.addEventListener('click', () => onPageStep(button.getAttribute('data-step')));
+    }
+    for (const button of implButtons) {
+      button.addEventListener('click', () => onImpl(button.getAttribute('data-impl')));
     }
     earlierBtn.addEventListener('click', () => onLoadEarlier());
     retryBtn.addEventListener('click', () => onRetry());

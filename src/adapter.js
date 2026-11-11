@@ -528,6 +528,30 @@ DSHC.adapter = (() => {
     return root;
   }
 
+  /* --------------------------------------------- B-Native 行属性（宿主契约） */
+
+  /**
+   * B-Native：我们自己渲染出来的行要带上宿主的行属性，
+   * 聊天流那套间距/动效/锚点选择器才会继续作用在这些行上。
+   * 属性名属于宿主契约，按硬约束只能出现在本文件（scripts/check.mjs 会查）。
+   *
+   * @param {{key?: string, kind?: string, location?: {turn?: {turn?: number}}}} node 宿主 chat 节点
+   * @returns {Record<string, string|number>}
+   */
+  function flowRowAttrs(node) {
+    const key = node && node.key ? String(node.key) : '';
+    const kind = node && node.kind ? String(node.kind) : '';
+    const attrs = {
+      'data-chat-flow-key': key,
+      'data-chat-node-key': key,
+      'data-chat-anchor-key': key,
+      'data-chat-flow-kind': kind
+    };
+    const turn = node && node.location ? node.location.turn : null;
+    if (turn && typeof turn.turn === 'number') attrs['data-chat-turn'] = turn.turn;
+    return attrs;
+  }
+
   /* ------------------------------------------------ B′ 边界副本（只读） */
 
   /**
@@ -675,6 +699,7 @@ DSHC.adapter = (() => {
     restoreAnchor,
     sanitize,
     overlayClone,
+    flowRowAttrs,
     fitContent,
     unfitContent,
     watchForScroller

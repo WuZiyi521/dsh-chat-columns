@@ -26,7 +26,9 @@ DSHC.app = (() => {
     pageStep: 'screen',
     resolved: 1,
     /** B′ 连续流：内部实验开关，不是用户可见模式。 */
-    flow: false
+    flow: false,
+    /** 无缝竖向的实现方式：ghost（轻量）| native（交互）。 */
+    impl: 'ghost'
   };
 
   const target = { scroller: null, column: null, reason: 'no-conversation', rows: 0 };
@@ -133,6 +135,7 @@ DSHC.app = (() => {
       resolved: state.resolved,
       autoLoad: autoFor(state.mode),
       variant: state.variant,
+      impl: state.impl,
       pageStep: state.pageStep,
       pageInfo: state.mode === 'seamless' && state.variant !== 'vertical' && paged ? paged.diagnose() : null,
       mobile: isMobile(),
@@ -489,6 +492,33 @@ DSHC.app = (() => {
     else render();
   }
 
+  /**
+   * 无缝竖向的实现方式（并列两档，阅读模型完全一样）：
+   *  - ghost：轻量版 —— 原生节点 + 边界克隆，跨缝那份只读；
+   *  - native：交互版 —— 接管 chat flow，跨缝那份是真实 React 实例。
+   * @param {string} value 'ghost' | 'native'
+   */
+  function setImpl(value) {
+    const next = String(value) === 'native' ? 'native' : 'ghost';
+    if (next === state.impl) return;
+    if (next === 'native') {
+      const ok = DSHC.native && DSHC.native.install(pluginCtx);
+      if (!ok) {
+        const detail = DSHC.native ? DSHC.native.diagnose().lastError : 'native 模块缺失';
+        state.prefNote = '交互版不可用：' + (detail || '未知原因');
+        render();
+        return;
+      }
+      // 两套渲染层不能同时动 DOM：先把轻量版那套退回原生。
+      if (state.mode !== 'native') setMode('native');
+    } else if (DSHC.native) {
+      DSHC.native.uninstall();
+    }
+    state.impl = next;
+    delete state.prefNote;
+    applyMode();
+  }
+
   function nextPage() {
     if (state.mode === 'seamless' && state.variant !== 'vertical' && paged) paged.next();
   }
@@ -571,6 +601,7 @@ DSHC.app = (() => {
       onColumns: setColumns,
       onAutoLoad: setAutoLoad,
       onVariant: setVariant,
+      onImpl: setImpl,
       onPageStep: setPageStep,
       onLoadEarlier: loadEarlier,
       onRetry: () => {
@@ -605,6 +636,8 @@ DSHC.app = (() => {
     if (!mounted) return;
     mounted = false;
     disposed = true;
+    // 停用插件时把 flow 槽位还回宿主，否则聊天会停在我们的实现上。
+    if (DSHC.native) DSHC.native.uninstall();
 
     // 热更场景：旧实例的 disposer 可能晚于新实例执行。
     // 如果我们的根节点已经被新实例摘掉，只清理自己的监听与定时器，绝不回滚新实例的宿主改动。
@@ -703,6 +736,7 @@ DSHC.app = (() => {
       newspaper: newspaper ? newspaper.diagnose() : null,
       seamless: seamless ? seamless.diagnose() : null,
       flow: flow ? flow.diagnose() : null,
+      native: DSHC.native ? DSHC.native.diagnose() : null,
       paged: paged ? paged.diagnose() : null,
       mirror: mirror ? { active: mirror.isActive() } : null,
       history: history ? history.snapshot() : null
@@ -717,6 +751,8 @@ DSHC.app = (() => {
       pluginCtx = ctx || null;
       if (started) return api;
       started = true;
+      // 上次是交互版的话，这里补装槽位。
+      if (state.impl === 'native' && DSHC.native) DSHC.native.install(pluginCtx);
       scheduleMount();
       if (pluginCtx && typeof pluginCtx.effect === 'function') {
         try {
@@ -735,6 +771,7 @@ DSHC.app = (() => {
     setVariant,
     setPageStep,
     setFlow,
+    setImpl,
     nextPage,
     prevPage,
     setPage,
@@ -780,6 +817,7 @@ DSHC.app = (() => {
       setVariant,
       setPageStep,
       setFlow,
+      setImpl,
       nextPage,
       prevPage,
       setPage,

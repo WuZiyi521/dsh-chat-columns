@@ -709,6 +709,27 @@ step('连续流（B′）：连续堆叠 + 边界副本 + 只读副本净化', (
   run('window.__dshc.setFlow(false);');
 });
 
+step('交互版（Native）：没有槽位服务时安全降级，不动用户读法', () => {
+  const data = read(`(() => {
+    const before = window.__dshc.getState().mode;
+    window.__dshc.setImpl('native');
+    const after = window.__dshc.getState().mode;
+    const diag = window.__dshc.diagnose().native;
+    window.__dshc.setImpl('ghost');
+    return {
+      before,
+      after,
+      installed: diag ? diag.installed : null,
+      priority: diag ? diag.priority : null,
+      lastError: diag ? diag.lastError : null
+    };
+  })()`);
+  assert.equal(data.installed, false, '没有 ctx.slots 时不得假装装上了');
+  assert.equal(data.priority, -1, '覆盖宿主的 priority 必须是 -1（宿主是 0）');
+  assert.ok(String(data.lastError).indexOf('slots') >= 0, '降级原因要能说明是缺 slots');
+  assert.equal(data.after, data.before, '装不上时不得改动用户原来的读法');
+});
+
 step('无缝（横向/翻页）：纸带 + 宿主横向滚动 + 开关还原', () => {
   run('window.__dshc.setVariant("paged");');
   const paged = read(`(() => {

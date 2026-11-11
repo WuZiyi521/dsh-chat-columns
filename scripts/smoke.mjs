@@ -618,7 +618,8 @@ step('竖向无缝（轻量版）：连续堆叠 + 边界副本 + 只读副本�
     const c = __fixture.column;
     const clones = Array.from(c.children).filter((node) => node.hasAttribute('data-dshc-clone'));
     const first = clones[0];
-    const crossing = __fixture.rows[2];
+    // 进竖向时停在会话底部，所以可见的是最后那条超长消息
+    const crossing = __fixture.rows[6];
     return {
       active: diag.active,
       H: diag.H,
@@ -640,6 +641,7 @@ step('竖向无缝（轻量版）：连续堆叠 + 边界副本 + 只读副本�
           }
         : null,
       crossingTransform: crossing.style.getPropertyValue('transform'),
+      scroll: diag.scroll,
       tallMax: __fixture.rows[6].style.getPropertyValue('max-height'),
       tallOverflow: __fixture.rows[6].style.getPropertyValue('overflow-y')
     };
@@ -653,6 +655,7 @@ step('竖向无缝（轻量版）：连续堆叠 + 边界副本 + 只读副本�
   assert.equal(data.maxScroll, 1872);
   assert.equal(data.expected, 2532);
   assert.equal(data.spacer, '1872px', '占位层 = 内容总高 − 列数×H');
+  assert.equal(data.scroll, 1872, '进入竖向应该直接停在会话底部');
   assert.ok(data.cloneCount >= 1, '跨缝的消息必须有边界副本');
   assert.equal(data.views > data.cloneCount, true, '视图数 = 原件 + 副本');
   // 副本是只读的：点不动、选不进、读屏不重复、不带宿主身份
@@ -661,8 +664,8 @@ step('竖向无缝（轻量版）：连续堆叠 + 边界副本 + 只读副本�
   assert.equal(data.clone.aria, 'true');
   assert.equal(data.clone.inert, true);
   assert.equal(data.clone.itemKey, null);
-  // 跨缝那条：原件放末段（第 2 列），所以 transform 落在第 2 列的横坐标上
-  assert.ok(data.crossingTransform.indexOf('translate3d(566px') === 0, data.crossingTransform);
+  // 跨缝那条：原件放末段（第 2 列），top = 1872 - 1872 - 660 = -660
+  assert.equal(data.crossingTransform, 'translate3d(566px,-660px,0)');
   // 超长消息：不静默截断，限高 + 自己滚
   assert.equal(data.tallMax, '1320px');
   assert.equal(data.tallOverflow, 'auto');

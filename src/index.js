@@ -74,6 +74,7 @@ DSHC.app = (() => {
       mode: MODES.indexOf(value.mode) >= 0 ? value.mode : 'native',
       cols: COLS.indexOf(String(value.cols)) >= 0 ? String(value.cols) : 'auto',
       variant: VARIANTS.indexOf(value.variant) >= 0 ? value.variant : 'vertical',
+      impl: value.impl === 'native' ? 'native' : 'ghost',
       pageStep: STEPS.indexOf(String(value.pageStep)) >= 0 ? String(value.pageStep) : 'screen',
       autoLoad: {
         newspaper: auto.newspaper === undefined ? DEFAULT_AUTO.newspaper : !!auto.newspaper,
@@ -91,6 +92,7 @@ DSHC.app = (() => {
           v: 1,
           mode: state.mode,
           cols: state.cols,
+          impl: state.impl,
           variant: state.variant,
           pageStep: state.pageStep,
           autoLoadHistory: state.autoLoad
@@ -246,6 +248,10 @@ DSHC.app = (() => {
     const items = itemsFromIndex();
     let note = '';
 
+    // 交互版只在「无缝 + 竖向」里生效，其它视图一律把槽位还回宿主。
+    const keepNative = state.mode === 'seamless' && state.variant === 'vertical' && state.impl === 'native';
+    if (!keepNative && DSHC.native && DSHC.native.isInstalled()) DSHC.native.uninstall();
+
     if (state.mode === 'newspaper') {
       if (state.resolved < 2) {
         note = '当前宽度只够 1 列';
@@ -254,9 +260,15 @@ DSHC.app = (() => {
         newspaper.apply(target, state.resolved);
       }
     } else if (state.mode === 'seamless') {
-      if (state.resolved < 2) {
+      const wantNative = state.impl === 'native' && state.variant === 'vertical';
+      if (wantNative) {
+        // 交互版自己接管 chat flow 渲染，宿主 DOM 一律不改写。
+        if (DSHC.native && !DSHC.native.isInstalled()) DSHC.native.install(pluginCtx);
+      } else if (state.resolved < 2) {
         note = '当前宽度只够 1 列';
       } else {
+        // 不在交互版时把槽位还回宿主，避免它继续接管渲染。
+        if (DSHC.native && DSHC.native.isInstalled()) DSHC.native.uninstall();
         hideHostOlder(true);
         // 竖向下：轻量 = 连续流引擎（Ghost）；交互 = 接管渲染器（Native，不走这里）。
         const useFlow = state.variant === 'vertical' && state.impl === 'ghost' && flow;
@@ -507,8 +519,10 @@ DSHC.app = (() => {
         render();
         return;
       }
-      // 两套渲染层不能同时动 DOM：先把轻量版那套退回原生。
-      if (state.mode !== 'native') setMode('native');
+      // 交互版就住在「无缝 → 竖向」这个视图里：切换实现方式不该把用户踢回原生视图。
+      state.mode = 'seamless';
+      state.variant = 'vertical';
+      writeSettings();
     } else if (DSHC.native) {
       DSHC.native.uninstall();
     }
@@ -567,6 +581,7 @@ DSHC.app = (() => {
     state.cols = settings.cols;
     state.autoLoad = settings.autoLoad;
     state.variant = settings.variant;
+    state.impl = settings.impl;
     state.pageStep = settings.pageStep;
 
     injectStyles();

@@ -605,12 +605,8 @@ DSHC.flow = (() => {
         place();
         active = true;
         bind();
-        if (anchor) {
-          const hit = records.find((rec) => rec.id === anchor.id);
-          setScroll(hit ? hit.start - Math.max(0, Math.min(H - 1, anchor.offset)) : 0);
-        } else {
-          setScroll(scroller.scrollTop);
-        }
+        // 进入竖向无缝时停在会话底部（最新内容），和宿主原生的落点一致。
+        setScroll(maxScroll());
       } catch (error) {
         console.error('[dsh-chat-columns] 连续流初始化失败，已退回原生', error);
         restore();

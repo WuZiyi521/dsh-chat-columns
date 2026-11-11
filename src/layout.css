@@ -50,6 +50,8 @@
   right: 18px;
   width: 38px;
   pointer-events: auto;
+  /* 复制模式会铺一整块覆盖层，控制器与面板必须压在它上面 */
+  z-index: 6;
 }
 
 #dshc-root .dshc-ctl-toggle {
@@ -354,6 +356,7 @@
 /* 顶部手动「加载更早」胶囊 */
 #dshc-root .dshc-pill {
   position: absolute;
+  z-index: 6;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -488,6 +491,7 @@
 
 #dshc-root .dshc-view {
   position: absolute;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;

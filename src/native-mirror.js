@@ -51,11 +51,15 @@ DSHC.nativeMirror = (() => {
       );
     }
 
+    /** 给诊断用：最近一次渲染用了几个栏。 */
+    const countRef = { value: 0 };
+
     function NativeMirror(props) {
       const { renderSlot, useChat, columns, shared } = props;
       const order = useChat((value) => value.order);
       const nodes = useChat((value) => value.nodes);
       const count = Math.max(1, Math.min(3, Number(columns) || 2));
+      countRef.value = count;
       const colRefs = react.useRef([]);
       const rootRef = react.useRef(null);
       const [height, setHeight] = react.useState(0);
@@ -103,10 +107,53 @@ DSHC.nativeMirror = (() => {
           )
         );
       }
-      return h('div', { ref: rootRef, 'data-dshc-native-mirror': '', style: height ? { height: height + 'px' } : undefined }, cols);
+      return h(
+        'div',
+        {
+          ref: rootRef,
+          'data-dshc-native-mirror': '',
+          'data-dshc-cols': String(count),
+          style: height ? { height: height + 'px' } : undefined
+        },
+        cols
+      );
     }
 
-    return NativeMirror;
+    /**
+     * 兜底边界：交互版复制出错时**不要**让槽位把整个实现退休（那会静默变回宿主单列，
+     * 看起来就是「只有一栏」）。这里把错误直接画在页面上，便于定位。
+     */
+    class MirrorErrorBoundary extends react.Component {
+      constructor(props) {
+        super(props);
+        this.state = { error: null };
+      }
+
+      static getDerivedStateFromError(error) {
+        return { error: error };
+      }
+
+      componentDidCatch(error) {
+        console.error('[dsh-chat-columns] 交互版复制渲染失败', error);
+      }
+
+      render() {
+        if (this.state.error) {
+          return react.createElement(
+            'div',
+            { 'data-dshc-native-mirror-error': '', style: { padding: '16px', color: '#d92d20', fontSize: '13px' } },
+            '交互版复制渲染失败：' + (this.state.error && this.state.error.message ? this.state.error.message : String(this.state.error))
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    function Guarded(props) {
+      return react.createElement(MirrorErrorBoundary, null, react.createElement(NativeMirror, props));
+    }
+
+    return Guarded;
   }
 
   return { make };

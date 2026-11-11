@@ -498,6 +498,8 @@ DSHC.native = (() => {
   function diagnose() {
     return {
       installed,
+      layout: layoutStore.layout,
+      columns: layoutStore.columns,
       priority: PRIORITY,
       react: !!React,
       renders,

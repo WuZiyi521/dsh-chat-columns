@@ -667,6 +667,21 @@ DSHC.adapter = (() => {
     return stop;
   }
 
+  /* --------------------------------------------------- 右上角动作栏（工具栏） */
+
+  /**
+   * 宿主会话标题栏右上角的动作栏（文件夹切换、更多、面板…）。
+   * 插件的控制器要贴在它左边，和这些图标排成一行。
+   * @returns {{top: number, bottom: number, left: number, right: number, height: number} | null}
+   */
+  function toolbarAnchor() {
+    const outlet = document.querySelector('[data-slot="conversation.session.header.actions"]');
+    if (!outlet) return null;
+    const rect = outlet.getBoundingClientRect();
+    if (!(rect.height > 0) || !(rect.width >= 0)) return null;
+    return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height };
+  }
+
   /* ------------------------------------------- 正文列被替换（切会话）的观察 */
 
   /**
@@ -749,6 +764,7 @@ DSHC.adapter = (() => {
     fitContent,
     unfitContent,
     watchForScroller,
-    watchColumns
+    watchColumns,
+    toolbarAnchor
   };
 })();

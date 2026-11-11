@@ -394,7 +394,7 @@ step('挂载完成且没有 activation error', () => {
   );
   assert.equal(state.error, null, '激活阶段不应记录错误');
   assert.equal(state.api, true, '应当暴露 window.__dshc');
-  assert.equal(state.mode, 'native', '默认模式必须是原生');
+  assert.equal(state.mode, 'seamless', '首次安装默认进无缝（轻量）');
 });
 
 step('控制器与样式就位', () => {

@@ -232,6 +232,8 @@ DSHC.controller = (() => {
     root.append(wrap, pill);
 
     let open = false;
+    /** 是否贴到了宿主右上角动作栏（决定按钮样式与角标文案）。 */
+    let anchored = false;
     let lastMode = '';
 
     function setOpen(next, focusToggle) {
@@ -395,15 +397,35 @@ DSHC.controller = (() => {
       }
     }
 
+    /**
+     * 摆放控制器。
+     * 优先贴到宿主右上角动作栏的左边（和文件夹/更多/面板图标排成一行）；
+     * 宿主没给这个槽时，退回原来的悬浮位置。
+     */
     function position(rect) {
       if (!rect) return;
-      const scrollbar = rect.scrollbarWidth || 5;
-      // 右侧让出：原生滚动条 + 安全距 + TurnNavigator 轨道（28px + 12px）。
-      const rightInset = Math.max(12, window.innerWidth - rect.right + scrollbar + 12 + 40);
-      wrap.style.top = Math.max(8, Math.round(rect.top) + 10) + 'px';
-      wrap.style.right = Math.round(rightInset) + 'px';
-      const maxPanel = Math.max(220, Math.min(460, Math.round(rect.height) - 88));
-      panel.style.maxHeight = maxPanel + 'px';
+      const bar = DSHC.adapter.toolbarAnchor ? DSHC.adapter.toolbarAnchor() : null;
+      const TOGGLE_H = 30;
+      const GAP = 8;
+
+      if (bar) {
+        const top = Math.round(bar.top + (bar.height - TOGGLE_H) / 2);
+        const right = Math.round(window.innerWidth - bar.left + GAP);
+        anchored = true;
+        wrap.setAttribute('data-dshc-anchor', 'toolbar');
+        wrap.style.top = top + 'px';
+        wrap.style.right = right + 'px';
+        panel.style.maxHeight = Math.max(220, Math.min(460, Math.round(rect.height) - (top - rect.top) - 48)) + 'px';
+      } else {
+        anchored = false;
+        wrap.removeAttribute('data-dshc-anchor');
+        const scrollbar = rect.scrollbarWidth || 5;
+        const rightInset = Math.max(12, window.innerWidth - rect.right + scrollbar + 12 + 40);
+        wrap.style.top = Math.max(8, Math.round(rect.top) + 10) + 'px';
+        wrap.style.right = Math.round(rightInset) + 'px';
+        panel.style.maxHeight = Math.max(220, Math.min(460, Math.round(rect.height) - 88)) + 'px';
+      }
+
       pill.style.top = Math.max(8, Math.round(rect.top) + 10) + 'px';
       pill.style.left = Math.round(rect.left + rect.width / 2) + 'px';
     }

@@ -82,7 +82,8 @@ DSHC.app = (() => {
     const value = raw && typeof raw === 'object' ? raw : {};
     const auto = value.autoLoadHistory && typeof value.autoLoadHistory === 'object' ? value.autoLoadHistory : {};
     return {
-      mode: MODES.indexOf(value.mode) >= 0 ? value.mode : 'native',
+      // 第一次安装默认进「无缝 · 轻量」：这才是这个插件的卖点。
+      mode: MODES.indexOf(value.mode) >= 0 ? value.mode : 'seamless',
       cols: COLS.indexOf(String(value.cols)) >= 0 ? String(value.cols) : 'auto',
       variant: VARIANTS.indexOf(value.variant) >= 0 ? value.variant : 'vertical',
       impl: value.impl === 'native' ? 'native' : 'ghost',

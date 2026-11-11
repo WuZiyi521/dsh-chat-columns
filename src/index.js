@@ -869,6 +869,7 @@ DSHC.app = (() => {
       seamless: seamless ? seamless.diagnose() : null,
       flow: flow ? flow.diagnose() : null,
       native: DSHC.native ? DSHC.native.diagnose() : null,
+      toolbar: DSHC.adapter.lastToolbar ? DSHC.adapter.lastToolbar() : null,
       paged: paged ? paged.diagnose() : null,
       mirror: mirror ? { active: mirror.isActive() } : null,
       history: history ? history.snapshot() : null

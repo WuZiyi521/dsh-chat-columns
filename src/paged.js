@@ -95,6 +95,8 @@ DSHC.paged = (() => {
         [adapter.HOST.contentWidth]: '100%'
       });
       adapter.setAttr(column, 'data-dshc-paged', '');
+      // 内容要能塞进列宽：否则长代码行/宽表会横向溢出，既难看也会让列数算错。
+      adapter.fitContent(column);
 
       // 估计的列数会偏（估多了最右端多出空白列，估少了差一列）。
       // 用「最后一条消息的右边缘」反推**实际用掉几列**，再按实际宽度重设一次。
@@ -154,16 +156,18 @@ DSHC.paged = (() => {
     function measureUsedCols() {
       const items = adapter.getItems(column);
       const base = column.getBoundingClientRect().left;
-      let right = 0;
+      let maxCol = 0;
       for (let i = 0; i < items.length; i += 1) {
         const el = items[i].el;
         if (!el || !el.isConnected) continue;
         const rect = el.getBoundingClientRect();
         if (!(rect.height > 0 || rect.width > 0)) continue;
-        right = Math.max(right, rect.right - base);
+        // 用**左边缘**而不是右边缘：列起点精确落在 k*step，
+        // 而右边缘会被「比列还宽的内容」（长代码行/宽表）撑出去，反推出多余的列。
+        const col = Math.round((rect.left - base) / step) + 1;
+        if (col > maxCol) maxCol = col;
       }
-      if (!(right > 0)) return Math.max(1, totalCols);
-      return Math.max(1, Math.ceil((right + GAP) / step));
+      return Math.max(1, maxCol || totalCols);
     }
 
     function pageWidth() {
@@ -175,9 +179,18 @@ DSHC.paged = (() => {
       return Math.max(0, (totalCols - Math.max(1, cols)) * step);
     }
 
-    /** 实际能滚到的最右端：算式和宿主实测取大者，避免"差一列"。 */
+    /**
+     * 实际能滚到的最右端：以纸带的真实右边缘为准（宿主 scrollWidth 可能比纸带更大，
+     * 滚过头就是一片空白），再用算式兜底。
+     */
     function endLeft() {
-      return Math.max(maxLeft(), maxScroll());
+      if (!host) return maxLeft();
+      const hostRect = host.getBoundingClientRect();
+      const colRect = column.getBoundingClientRect();
+      const contentLeft = hostRect.left + (parseFloat(getComputedStyle(host).paddingLeft) || 0);
+      const tapeRight = colRect.right - contentLeft;
+      const byTape = Math.round(tapeRight - host.clientWidth);
+      return Math.max(maxLeft(), Math.min(maxScroll(), byTape));
     }
 
     function recalcPages() {
@@ -466,6 +479,7 @@ DSHC.paged = (() => {
 
     function restore() {
       active = false;
+      adapter.unfitContent();
       followEnd = true;
       lastWrite = -1;
       shellCache = { H: 0, colW: 0, cols: 0, totalCols: 0 };

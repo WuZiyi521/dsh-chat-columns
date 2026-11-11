@@ -611,47 +611,8 @@ step('报纸模式：所有内容可跨列，代码块的滚动容器被放开',
   assert.equal(data.tableWidth, '100%');
 });
 
-step('无缝模式：粘滞视口层 + 占位层 + 绝对定位', () => {
+step('竖向无缝（轻量版）：连续堆叠 + 边界副本 + 只读副本净化', () => {
   run('window.__dshc.setMode("seamless");');
-  const data = read(`(() => {
-    const diag = window.__dshc.diagnose().seamless;
-    const c = __fixture.column;
-    return {
-      active: diag.active,
-      H: diag.H,
-      columns: diag.columns,
-      pages: diag.pages,
-      total: diag.total,
-      maxScroll: diag.maxScroll,
-      spacer: __fixture.wrap.style.getPropertyValue('--dshc-spacer'),
-      hostMark: __fixture.wrap.hasAttribute('data-dshc-b-host'),
-      position: c.style.getPropertyValue('position'),
-      height: c.style.getPropertyValue('height'),
-      overflow: c.style.getPropertyValue('overflow'),
-      items: __fixture.rows.filter((row) => row.getAttribute('data-dshc-b') === 'item').length,
-      transforms: __fixture.rows.map((row) => row.style.getPropertyValue('transform'))
-    };
-  })()`);
-  assert.equal(data.active, true);
-  assert.equal(data.H, 660);
-  assert.equal(data.columns, 2);
-  assert.equal(data.pages, 4);
-  assert.equal(data.total, 2640);
-  assert.equal(data.maxScroll, 1980);
-  assert.equal(data.spacer, '1980px');
-  assert.equal(data.hostMark, true);
-  assert.equal(data.position, 'sticky');
-  assert.equal(data.height, '660px');
-  assert.equal(data.overflow, 'hidden');
-  assert.equal(data.items, 7);
-  assert.ok(
-    data.transforms.every((value) => value.indexOf('translate3d') === 0),
-    '每条消息都应有 translate3d'
-  );
-});
-
-step('连续流（B′）：连续堆叠 + 边界副本 + 只读副本净化', () => {
-  run('window.__dshc.setFlow(true);');
   const data = read(`(() => {
     const diag = window.__dshc.diagnose().flow;
     const c = __fixture.column;
@@ -705,8 +666,6 @@ step('连续流（B′）：连续堆叠 + 边界副本 + 只读副本净化', (
   // 超长消息：不静默截断，限高 + 自己滚
   assert.equal(data.tallMax, '1320px');
   assert.equal(data.tallOverflow, 'auto');
-
-  run('window.__dshc.setFlow(false);');
 });
 
 step('交互版（Native）：没有槽位服务时安全降级，不动用户读法', () => {
